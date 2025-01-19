@@ -1,4 +1,4 @@
-THIS EXTENSION WAS CREATED BY CALEB W CRAIG FOR SAS CSHS 2025 HACKATHON 
+THIS EXTENSION WAS CREATED SOLELY BY CALEB W CRAIG FOR THE INTENT PURPOSE OF SUBMISION TO THE SAS CSHS 2025 HACKATHON 
 Copyright <2025> <CALEB W CRAIG>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
