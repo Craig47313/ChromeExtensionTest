@@ -267,12 +267,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
         equationDisplay.innerHTML = sideAsString;
 
-        rightODisplay.textContent = rightElementsTotal.get(8);
-        leftODisplay.textContent = leftElementsTotal.get(8);
 
     }
-    const rightODisplay = document.getElementById("rightOLevels");
-    const leftODisplay = document.getElementById("leftOLevels");
+
     /*function checkIfMapsAreEqual(map1, map2) {
         if (map1.size != map2.size) return false;
         for (let [key, value] of map1) {
