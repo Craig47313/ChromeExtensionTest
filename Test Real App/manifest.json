@@ -1,0 +1,10 @@
+{
+    "name": "Periodic Table and Balenced Equations",
+    "description": "Extension for periodic table and to compare if 2 sides are level",
+    "version": "1.0",
+    "manifest_version": 3,
+    "action": {
+      "default_popup": "disp.html",
+      "default_icon": "PeriodicTableImg.png"
+    }
+  }

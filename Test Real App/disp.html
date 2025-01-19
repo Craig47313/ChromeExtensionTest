@@ -1,0 +1,262 @@
+<html>
+    <style>
+    
+        body {
+          margin: 0;
+          padding: 0;
+          width: 580px; 
+          height: 480px; 
+          background-color: #f0f0f0;
+          overflow: auto; 
+        }
+    
+        h1 {
+          text-align: center;
+        }
+    
+        p {
+          text-align: center;
+          font-size: 14px;
+        }
+        .periodicTable {
+          display: grid;
+          grid-template-columns: repeat(19, 30px); 
+          max-width: 600; 
+        }
+        /* ^^ defines an 18 large grid for the periodic table*/
+        .elementButton {
+            width: 30;
+            height: 30;
+            background-color: #364041;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: rgb(204, 245, 222);
+        }
+        
+        .gridItem {
+          background-color: #f0f0f0;
+          border: 1px solid #f0f0f0;
+          text-align: center;
+          height: 30;
+          width: 30;
+        }
+    </style>
+    <body>
+        
+        <h4>amt of O on left side is <span id="leftOLevels">n/a</span> | amt of O on right side is <span id="rightOLevels">n/a</span></h4>
+        <h3>Equation: <span id = "Equation">No compound in equation currently </span> | <br><br> amt adding: <span id = "amtDisplay">1</span> | current side is: <span id = "currentSideDisplay">Left</span></h3>
+        current element is: <span id = "currentElementDisplay"> N/A</span> <br>
+        <button type="button" id="addElementButton">AddCurrentElement</button><button type="button" id="newCompoundButton">newCompound</button> <button type="button" id="swapSideButton">swap side adding</button><br>
+        <button type="button" id="increaseAmtButton">increaseCurrentAmt</button><button type="button" id="decreaseAmtButton">decreaseCurrentAmt</button>
+        <div class="periodicTable">
+          <button class="elementButton" id="elementButton1">H</button>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton2">He</button>
+          
+          <button class="elementButton" id="elementButton3">Li</button>
+          <button class="elementButton" id="elementButton4">Be</button>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton5">B</button>
+          <button class="elementButton" id="elementButton6">C</button>
+          <button class="elementButton" id="elementButton7">N</button>
+          <button class="elementButton" id="elementButton8">O</button>
+          <button class="elementButton" id="elementButton9">F</button>
+          <button class="elementButton" id="elementButton10">Ne</button>
+
+          <button class="elementButton" id="elementButton11">Na</button>
+          <button class="elementButton" id="elementButton12">Mg</button>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton13">Al</button>
+          <button class="elementButton" id="elementButton14">Si</button>
+          <button class="elementButton" id="elementButton15">P</button>
+          <button class="elementButton" id="elementButton16">S</button>
+          <button class="elementButton" id="elementButton17">Cl</button>
+          <button class="elementButton" id="elementButton18">Ar</button>
+
+          <button class="elementButton" id="elementButton19">K</button>
+          <button class="elementButton" id="elementButton20">Ca</button>
+          <button class="elementButton" id="elementButton21">Sc</button>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton22">Ti</button>
+          <button class="elementButton" id="elementButton23">V</button>
+          <button class="elementButton" id="elementButton24">Cr</button>
+          <button class="elementButton" id="elementButton25">Mn</button>
+          <button class="elementButton" id="elementButton26">Fe</button>
+          <button class="elementButton" id="elementButton27">Co</button>
+          <button class="elementButton" id="elementButton28">Ni</button>
+          <button class="elementButton" id="elementButton29">Cu</button>
+          <button class="elementButton" id="elementButton30">Zn</button>
+          <button class="elementButton" id="elementButton31">Ga</button>
+          <button class="elementButton" id="elementButton32">Ge</button>
+          <button class="elementButton" id="elementButton33">As</button>
+          <button class="elementButton" id="elementButton34">Se</button>
+          <button class="elementButton" id="elementButton35">Br</button>
+          <button class="elementButton" id="elementButton36">Kr</button>
+
+          <button class="elementButton" id="elementButton37">Rb</button>
+          <button class="elementButton" id="elementButton38">Sr</button>
+          <button class="elementButton" id="elementButton39">Y</button>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton40">Zr</button>
+          <button class="elementButton" id="elementButton41">Nb</button>
+          <button class="elementButton" id="elementButton42">Mo</button>
+          <button class="elementButton" id="elementButton43">Tc</button>
+          <button class="elementButton" id="elementButton44">Ru</button>
+          <button class="elementButton" id="elementButton45">Rh</button>
+          <button class="elementButton" id="elementButton46">Pd</button>
+          <button class="elementButton" id="elementButton47">Ag</button>
+          <button class="elementButton" id="elementButton48">Cd</button>
+          <button class="elementButton" id="elementButton49">In</button>
+          <button class="elementButton" id="elementButton50">Sn</button>
+          <button class="elementButton" id="elementButton51">Sb</button>
+          <button class="elementButton" id="elementButton52">Te</button>
+          <button class="elementButton" id="elementButton53">I</button>
+          <button class="elementButton" id="elementButton54">Xe</button>
+
+          <button class="elementButton" id="elementButton55">Cs</button>
+          <button class="elementButton" id="elementButton56">Ba</button>
+          <button class="elementButton" id="elementButton57">La</button>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton72">Hf</button>
+          <button class="elementButton" id="elementButton73">Ta</button>
+          <button class="elementButton" id="elementButton74">W</button>
+          <button class="elementButton" id="elementButton75">Re</button>
+          <button class="elementButton" id="elementButton76">Os</button>
+          <button class="elementButton" id="elementButton77">Ir</button>
+          <button class="elementButton" id="elementButton78">Pt</button>
+          <button class="elementButton" id="elementButton79">Au</button>
+          <button class="elementButton" id="elementButton80">Hg</button>
+          <button class="elementButton" id="elementButton81">Ti</button>
+          <button class="elementButton" id="elementButton82">Pb</button>
+          <button class="elementButton" id="elementButton83">Bi</button>
+          <button class="elementButton" id="elementButton84">Po</button>
+          <button class="elementButton" id="elementButton85">At</button>
+          <button class="elementButton" id="elementButton86">Rn</button>
+
+          <button class="elementButton" id="elementButton87">Fr</button>
+          <button class="elementButton" id="elementButton88">Ra</button>
+          <button class="elementButton" id="elementButton89">Ac</button>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton104">Rf</button>
+          <button class="elementButton" id="elementButton105">Db</button>
+          <button class="elementButton" id="elementButton106">Sg</button>
+          <button class="elementButton" id="elementButton107">Bh</button>
+          <button class="elementButton" id="elementButton108">Hs</button>
+          <button class="elementButton" id="elementButton109">Mt</button>
+          <button class="elementButton" id="elementButton110">Ds</button>
+          <button class="elementButton" id="elementButton111">Rg</button>
+          <button class="elementButton" id="elementButton112">Cn</button>
+          <button class="elementButton" id="elementButton113">Nh</button>
+          <button class="elementButton" id="elementButton114">Fl</button>
+          <button class="elementButton" id="elementButton115">Mc</button>
+          <button class="elementButton" id="elementButton116">Lv</button>
+          <button class="elementButton" id="elementButton117">Ts</button>
+          <button class="elementButton" id="elementButton118">Og</button>
+
+
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <!--^^ empty space to separate the bottom 2 rows-->
+
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton58">Ce</button>
+          <button class="elementButton" id="elementButton59">Pr</button>
+          <button class="elementButton" id="elementButton60">Nd</button>
+          <button class="elementButton" id="elementButton61">Pm</button>
+          <button class="elementButton" id="elementButton62">Sm</button>
+          <button class="elementButton" id="elementButton63">Eu</button>
+          <button class="elementButton" id="elementButton64">Gd</button>
+          <button class="elementButton" id="elementButton65">Tb</button>
+          <button class="elementButton" id="elementButton66">Dy</button>
+          <button class="elementButton" id="elementButton67">Ho</button>
+          <button class="elementButton" id="elementButton68">Er</button>
+          <button class="elementButton" id="elementButton69">Tm</button>
+          <button class="elementButton" id="elementButton70">Yb</button>
+          <button class="elementButton" id="elementButton71">Lu</button>
+          <div class="gridItem"></div>
+
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <div class="gridItem"></div>
+          <button class="elementButton" id="elementButton90">Th</button>
+          <button class="elementButton" id="elementButton91">Pa</button>
+          <button class="elementButton" id="elementButton92">U</button>
+          <button class="elementButton" id="elementButton93">Np</button>
+          <button class="elementButton" id="elementButton94">Pu</button>
+          <button class="elementButton" id="elementButton95">Am</button>
+          <button class="elementButton" id="elementButton96">Cm</button>
+          <button class="elementButton" id="elementButton97">Bk</button>
+          <button class="elementButton" id="elementButton98">Cf</button>
+          <button class="elementButton" id="elementButton99">Es</button>
+          <button class="elementButton" id="elementButton100">Fm</button>
+          <button class="elementButton" id="elementButton101">Md</button>
+          <button class="elementButton" id="elementButton102">No</button>
+          <button class="elementButton" id="elementButton103">Lr</button>
+          <div class="gridItem"></div>
+        </div>
+
+      
+      <script src="script.js"></script>
+    </body>
+
+</html>
