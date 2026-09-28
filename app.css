@@ -67,6 +67,10 @@ svg { display: block; flex-shrink: 0; }
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.on { color: var(--accent); }
+.icon-btn.danger:hover { color: var(--danger); }
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+.delete-sel { height: 30px; padding: 0 10px; margin-right: 4px; font-size: 12.5px; }
 .icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
 
 .btn {

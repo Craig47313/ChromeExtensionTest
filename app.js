@@ -998,6 +998,7 @@
       },
       onChange: scheduleSave,
       onHistoryChange: syncDrawUI,
+      onSelectionChange: syncDrawUI,
       onToolChange: syncDrawUI,
       onStyleChange: () => {
         syncDrawUI();
@@ -1069,6 +1070,9 @@
     els.sizeDot.style.setProperty('--dot', group === 'eraser' ? 'var(--muted)' : ink.resolveColor(color));
     $('[data-draw="undo"]').disabled = !ink.canUndo;
     $('[data-draw="redo"]').disabled = !ink.canRedo;
+    const delSel = $('[data-draw="delete-sel"]');
+    delSel.hidden = !ink.selection.size;
+    delSel.lastChild.textContent = ink.selection.size > 1 ? `Delete ${ink.selection.size}` : 'Delete';
   }
 
   els.drawPane.addEventListener('click', async (e) => {
@@ -1089,6 +1093,10 @@
     switch (act.dataset.draw) {
       case 'undo': ink.undo(); break;
       case 'redo': ink.redo(); break;
+      case 'delete-sel':
+        ink.deleteSelection();
+        els.canvas.focus({ preventScroll: true });
+        break;
       case 'clear':
         if (ink.shapes.length) {
           ink.clear();
@@ -1317,6 +1325,7 @@
   $('#newDrawBtn').addEventListener('click', () => createNote('drawing'));
   for (const b of $$('[data-new]')) b.addEventListener('click', () => createNote(b.dataset.new));
   els.pinBtn.addEventListener('click', togglePin);
+  $('#deleteNoteBtn').addEventListener('click', deleteCurrent);
   $('#backBtn').addEventListener('click', async () => {
     const id = state.currentId;
     await saveNow();

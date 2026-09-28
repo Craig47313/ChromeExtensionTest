@@ -47,6 +47,7 @@
           <input id="titleInput" class="title-input" placeholder="Untitled" maxlength="200" aria-label="Title">
           <span id="saveStatus" class="save-status" aria-live="polite"></span>
           <button class="icon-btn" id="pinBtn" data-icon="pin" title="Pin to top"></button>
+          <button class="icon-btn danger" id="deleteNoteBtn" data-icon="trash" title="Delete note"></button>
           <button class="icon-btn" id="noteMenuBtn" data-icon="more" title="Note options" aria-haspopup="menu"></button>
         </header>
 
@@ -106,9 +107,10 @@
                 <option value="lines">Lined</option>
               </select>
               <button class="icon-btn" data-draw="image" data-icon="image" title="Insert image (or paste / drop one)"></button>
+              <button class="btn danger delete-sel" data-draw="delete-sel" data-icon="trash" title="Delete selected (Delete)" hidden>Delete</button>
               <button class="icon-btn" data-draw="undo" data-icon="undo" title="Undo (Ctrl+Z)"></button>
               <button class="icon-btn" data-draw="redo" data-icon="redo" title="Redo (Ctrl+Shift+Z)"></button>
-              <button class="icon-btn" data-draw="clear" data-icon="trash" title="Clear canvas"></button>
+              <button class="icon-btn" data-draw="clear" data-icon="clear-canvas" title="Clear canvas"></button>
               <button class="zoom-btn" data-draw="zoom" id="zoomBtn" title="Zoom · click to fit drawing (Ctrl+scroll to zoom)">100%</button>
             </div>
           </div>

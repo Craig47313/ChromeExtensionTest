@@ -44,6 +44,9 @@
     }
     .btn:hover { background: rgba(255,255,255,.09); color: #fff; }
     .btn.active { background: #6361e8; color: #fff; }
+    .btn.del { color: #ff8787; }
+    .btn.del:hover { background: rgba(255,107,107,.18); color: #ffa8a8; }
+    .btn[hidden] { display: none; }
     .btn:disabled { opacity: .35; cursor: default; background: none; }
     .btn svg { display: block; }
     .sep { width: 1px; height: 22px; background: rgba(255,255,255,.13); margin: 0 2px; }
@@ -82,7 +85,8 @@
       <div class="group">
         <button class="btn" data-act="undo" title="Undo (Ctrl+Z)">${icon('undo')}</button>
         <button class="btn" data-act="redo" title="Redo (Ctrl+Shift+Z)">${icon('redo')}</button>
-        <button class="btn" data-act="clear" title="Clear drawings">${icon('trash')}</button>
+        <button class="btn del" data-act="delete" title="Delete selected (Delete)">${icon('trash')}</button>
+        <button class="btn" data-act="clear" title="Clear all drawings">${icon('clear-canvas')}</button>
         <button class="btn" data-act="pass" title="Click-through: interact with the page">${icon('pointer-click')}</button>
         <button class="btn" data-act="save" title="Save screenshot to Inkwell">${icon('camera')}</button>
         <button class="btn" data-act="close" title="Close (Esc)">${icon('x')}</button>
@@ -108,6 +112,7 @@
     onHistoryChange: syncUI,
     onToolChange: syncUI,
     onStyleChange: syncUI,
+    onSelectionChange: syncUI,
   });
 
   // World coordinates are document coordinates: drawings stick to the page.
@@ -150,6 +155,7 @@
     root.querySelectorAll('.size').forEach((b) => b.classList.toggle('active', sizes[+b.dataset.size] === ink.size));
     root.querySelector('[data-act="undo"]').disabled = !ink.canUndo;
     root.querySelector('[data-act="redo"]').disabled = !ink.canRedo;
+    root.querySelector('[data-act="delete"]').hidden = !ink.selection.size;
     root.querySelector('[data-act="pass"]').classList.toggle('active', passthrough);
   }
 
@@ -198,6 +204,7 @@
       const act = btn.dataset.act;
       if (act === 'undo') ink.undo();
       else if (act === 'redo') ink.redo();
+      else if (act === 'delete') ink.deleteSelection();
       else if (act === 'clear') ink.clear();
       else if (act === 'pass') setPassthrough(!passthrough);
       else if (act === 'save') saveScreenshot();
