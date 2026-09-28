@@ -46,6 +46,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+// ---------- badge: how many notes you have for the current site ----------
+// Needs the optional "tabs" permission to read tab URLs; silently does nothing without it.
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (_) {
+    return null;
+  }
+}
+
+async function updateBadge(tabId, url) {
+  if (tabId === undefined) return;
+  let text = '';
+  if (url && /^https?:/i.test(url)) {
+    const data = await chrome.storage.local.get(null);
+    const host = hostOf(url);
+    let count = 0;
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith(Store.PREFIX) && value && value.sourceUrl && hostOf(value.sourceUrl) === host) count++;
+    }
+    const annot = data['annot:' + url.split('#')[0]];
+    if (annot && annot.shapes && annot.shapes.length) count++;
+    text = count ? String(Math.min(count, 99)) : '';
+  }
+  await chrome.action.setBadgeBackgroundColor({ color: '#5b5bd6', tabId }).catch(() => {});
+  await chrome.action.setBadgeText({ text, tabId }).catch(() => {});
+}
+
+async function updateActiveBadge() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+  if (tab && tab.url) updateBadge(tab.id, tab.url);
+}
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'complete' && tab.url) updateBadge(tabId, tab.url);
+});
+chrome.tabs.onActivated.addListener(updateActiveBadge);
+chrome.permissions.onAdded.addListener(updateActiveBadge);
+
+let badgeTimer = 0;
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (!Object.keys(changes).some((k) => k.startsWith(Store.PREFIX) || k.startsWith('annot:'))) return;
+  clearTimeout(badgeTimer);
+  badgeTimer = setTimeout(updateActiveBadge, 500);
+});
+
 // ---------- helpers ----------
 
 function escapeHtml(s) {
@@ -164,7 +212,7 @@ async function createWelcomeNote() {
     '<h2>Writing shortcuts</h2>',
     '<p>At the start of a line, type <code>#</code>, <code>##</code>, <code>-</code>, <code>1.</code>, <code>[]</code>, <code>&gt;</code> or <code>```</code> followed by a space. Ctrl+B / I / U work as usual, and Ctrl+click opens a link.</p>',
     '<h2>Drawing shortcuts</h2>',
-    '<p><b>P</b> pen · <b>H</b> highlighter · <b>E</b> eraser · <b>L</b> line · <b>A</b> arrow · <b>R</b> rectangle · <b>O</b> ellipse · <b>T</b> text · <b>M</b> or hold <b>Space</b> to pan · <b>Ctrl+scroll</b> to zoom · <b>[ ]</b> brush size · <b>Ctrl+Z</b> undo</p>',
+    '<p><b>V</b> select · <b>P</b> pen · <b>H</b> highlighter · <b>E</b> eraser · <b>L</b> line · <b>A</b> arrow · <b>R</b> rectangle · <b>O</b> ellipse · <b>T</b> text · <b>M</b> or hold <b>Space</b> to pan · <b>Ctrl+scroll</b> to zoom · <b>[ ]</b> brush size · <b>Ctrl+Z</b> undo. With the select tool: drag to move, drag the corner to resize, <b>Delete</b> to remove, <b>Ctrl+D</b> to duplicate, click a color to recolor.</p>',
     '<p><br></p>',
   ].join('');
   const note = Store.createNote({

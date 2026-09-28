@@ -89,6 +89,29 @@ svg { display: block; flex-shrink: 0; }
 
 .new-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 12px; border-bottom: 1px solid var(--border); }
 
+/* ---------- current page ---------- */
+
+.page-ctx { margin: 10px 12px 0; padding: 10px 10px 8px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); }
+.ctx-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+.ctx-head svg { flex: none; }
+.ctx-host { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; color: var(--text); }
+.ctx-count { font-size: 11.5px; }
+.ctx-close { width: 22px; height: 22px; margin: -2px -4px -2px 0; }
+.ctx-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.ctx-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin: 0 -4px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+.ctx-item:hover, .ctx-item:focus-visible { background: var(--surface); outline: none; }
+.ctx-item.active { background: var(--accent-soft); }
+.ctx-item svg { color: var(--muted); flex: none; }
+.ctx-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-tag { flex: none !important; font-size: 10.5px; font-weight: 650; padding: 1px 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.ctx-empty { margin: 6px 0 2px; font-size: 12.5px; color: var(--muted); }
+.ctx-actions { display: flex; gap: 6px; margin-top: 8px; }
+.ctx-actions .btn { flex: 1; height: 30px; padding: 0 8px; font-size: 12.5px; }
+.ctx-actions .btn svg { width: 14px; height: 14px; }
+.ctx-intro { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--muted); }
+.ctx-intro b { display: block; color: var(--text); font-size: 13px; margin-bottom: 1px; }
+.ctx-intro svg { color: var(--accent); margin-top: 2px; }
+
 /* ---------- note list ---------- */
 
 .note-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }

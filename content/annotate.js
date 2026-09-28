@@ -9,6 +9,7 @@
 
   const STORAGE_KEY = 'annot:' + location.href.split('#')[0];
   const TOOLS = [
+    ['select', 'Select (V) · drag to move, corner to resize, Delete to remove'],
     ['pen', 'Pen (P)'],
     ['highlighter', 'Highlighter (H)'],
     ['line', 'Line (L)'],
@@ -82,7 +83,7 @@
         <button class="btn" data-act="undo" title="Undo (Ctrl+Z)">${icon('undo')}</button>
         <button class="btn" data-act="redo" title="Redo (Ctrl+Shift+Z)">${icon('redo')}</button>
         <button class="btn" data-act="clear" title="Clear drawings">${icon('trash')}</button>
-        <button class="btn" data-act="pass" title="Click-through: interact with the page">${icon('pointer')}</button>
+        <button class="btn" data-act="pass" title="Click-through: interact with the page">${icon('pointer-click')}</button>
         <button class="btn" data-act="save" title="Save screenshot to Inkwell">${icon('camera')}</button>
         <button class="btn" data-act="close" title="Close (Esc)">${icon('x')}</button>
       </div>
@@ -187,10 +188,11 @@
     if (!btn) return;
     if (btn.dataset.tool) ink.setTool(btn.dataset.tool);
     else if (btn.dataset.color) {
-      if (ink.tool === 'eraser') ink.setTool('pen');
+      if (ink.tool === 'select' && ink.recolorSelection(btn.dataset.color)) return syncUI();
+      if (ink.tool === 'eraser' || ink.tool === 'select') ink.setTool('pen');
       ink.color = btn.dataset.color;
     } else if (btn.dataset.size) {
-      if (ink.tool === 'text') ink.setTool('pen');
+      if (ink.tool === 'text' || ink.tool === 'select') ink.setTool('pen');
       ink.size = SIZE_SETS[ink.styleGroup()][+btn.dataset.size];
     } else {
       const act = btn.dataset.act;
@@ -234,7 +236,7 @@
 
   function onKeyDown(e) {
     if (passthrough || isTyping(e)) return;
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !ink.selection.size) {
       e.preventDefault();
       e.stopPropagation();
       close();

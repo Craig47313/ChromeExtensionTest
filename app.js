@@ -439,6 +439,7 @@
 
     els.listEmpty.hidden = notes.length > 0;
     els.listEmpty.textContent = all.length ? `No notes match “${state.query.trim()}”.` : 'No notes yet. Create one above!';
+    renderPageContext();
   }
 
   els.list.addEventListener('click', (e) => {
@@ -517,7 +518,7 @@
 
     if (focus) {
       if (note.type === 'text') placeCaretAtEnd(els.rich);
-      else els.title.focus();
+      else els.canvas.focus({ preventScroll: true }); // so tool shortcuts work right away
     }
   }
 
@@ -564,7 +565,7 @@
     renderList();
   }
 
-  async function createNote(type) {
+  async function createNote(type, extra = {}) {
     const prev = state.currentId;
     await saveNow();
     if (prev) await discardIfBlank(prev);
@@ -573,6 +574,7 @@
       html: type === 'text' ? '<p><br></p>' : '',
       drawing: type === 'drawing' ? { v: 1, background: state.settings.paper || 'dots', shapes: [] } : null,
       lastEditor: INSTANCE,
+      ...extra,
     });
     state.notes.set(note.id, note);
     await Store.put(note);
@@ -1077,7 +1079,8 @@
     }
     const swatch = e.target.closest('.swatch[data-color]');
     if (swatch) {
-      if (ink.tool === 'eraser' || ink.tool === 'hand') ink.setTool('pen');
+      if (ink.tool === 'select' && ink.recolorSelection(swatch.dataset.color)) return;
+      if (ink.tool === 'eraser' || ink.tool === 'hand' || ink.tool === 'select') ink.setTool('pen');
       ink.color = swatch.dataset.color;
       return;
     }
@@ -1102,7 +1105,8 @@
 
   els.swatches.addEventListener('input', (e) => {
     if (e.target.id !== 'customColor') return;
-    if (ink.tool === 'eraser' || ink.tool === 'hand') ink.setTool('pen');
+    if (ink.tool === 'select' && ink.recolorSelection(e.target.value)) return;
+    if (ink.tool === 'eraser' || ink.tool === 'hand' || ink.tool === 'select') ink.setTool('pen');
     ink.color = e.target.value;
   });
 
@@ -1240,6 +1244,7 @@
       { icon: 'copy', label: drawing ? 'Copy as image' : 'Copy as Markdown', run: copyCurrent },
       { icon: 'plus', label: 'Duplicate', run: duplicateCurrent },
       note.sourceUrl && { icon: 'external', label: 'Open source page', run: () => window.open(note.sourceUrl, '_blank', 'noopener') },
+      page.url && pageKey(page.url) !== pageKey(note.sourceUrl) && { icon: 'link', label: 'Link to current page', run: linkCurrentToPage },
       '-',
       { icon: 'trash', label: 'Delete note', danger: true, run: deleteCurrent },
     ]);
@@ -1347,6 +1352,8 @@
           state.notes.delete(id);
           if (id === state.currentId) showEmpty();
         }
+      } else if (key.startsWith('annot:')) {
+        refreshPageContext();
       } else if (key === 'openRequest' && newValue) {
         handleOpenRequest(newValue);
       } else if (key === 'settings' && newValue) {
@@ -1357,6 +1364,199 @@
     if (listChanged) renderList();
   });
 
+  // ---------- notes for the current page ----------
+
+  const page = { tabId: null, url: null, title: '', drawings: 0, canRead: false };
+
+  function pageKey(url) {
+    try {
+      const u = new URL(url);
+      return u.origin + u.pathname.replace(/\/$/, '') + u.search;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function hostOf(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  let refreshSeq = 0;
+  async function refreshPageContext() {
+    if (IS_TAB) return;
+    const seq = ++refreshSeq;
+    let tab = null;
+    try {
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    } catch (_) {
+      /* no tabs access */
+    }
+    const canRead = await chrome.permissions.contains({ permissions: ['tabs'] });
+    const url = tab && tab.url && /^https?:/i.test(tab.url) ? tab.url : null;
+    let drawings = 0;
+    if (url) {
+      const key = 'annot:' + url.split('#')[0];
+      const data = await chrome.storage.local.get(key);
+      drawings = (data[key] && data[key].shapes && data[key].shapes.length) || 0;
+    }
+    if (seq !== refreshSeq) return; // a newer refresh won
+    Object.assign(page, { tabId: tab ? tab.id : null, url, title: (tab && tab.title) || '', drawings, canRead });
+    renderPageContext();
+  }
+
+  function pageMatches() {
+    if (!page.url) return [];
+    const key = pageKey(page.url);
+    const host = hostOf(page.url);
+    const out = [];
+    for (const n of state.notes.values()) {
+      if (!n.sourceUrl) continue;
+      if (pageKey(n.sourceUrl) === key) out.push({ note: n, samePage: true });
+      else if (hostOf(n.sourceUrl) === host) out.push({ note: n, samePage: false });
+    }
+    return out.sort((a, b) => b.samePage - a.samePage || b.note.updated - a.note.updated);
+  }
+
+  function renderPageContext() {
+    const box = $('#pageCtx');
+    if (IS_TAB || state.query.trim()) {
+      box.hidden = true;
+      return;
+    }
+    box.textContent = '';
+
+    if (!page.url) {
+      // No URL: either a browser page, or we lack permission to read it.
+      if (page.canRead || state.settings.pageCtxDismissed) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      const intro = document.createElement('div');
+      intro.className = 'ctx-intro';
+      intro.innerHTML = InkIcons.svg('globe', 18);
+      const text = document.createElement('div');
+      text.innerHTML = '<b>Notes for the site you’re on</b>See clips and drawings from the current page right here.';
+      intro.appendChild(text);
+      const close = document.createElement('button');
+      close.className = 'icon-btn ctx-close';
+      close.title = 'Dismiss';
+      close.innerHTML = InkIcons.svg('x', 14);
+      close.addEventListener('click', async () => {
+        state.settings = await Store.setSettings({ pageCtxDismissed: true });
+        renderPageContext();
+      });
+      intro.appendChild(close);
+      const actions = document.createElement('div');
+      actions.className = 'ctx-actions';
+      const enable = document.createElement('button');
+      enable.className = 'btn primary';
+      enable.textContent = 'Turn on';
+      enable.addEventListener('click', async () => {
+        if (await chrome.permissions.request({ permissions: ['tabs'] })) refreshPageContext();
+      });
+      actions.appendChild(enable);
+      box.append(intro, actions);
+      return;
+    }
+
+    box.hidden = false;
+    const matches = pageMatches();
+    const head = document.createElement('div');
+    head.className = 'ctx-head';
+    head.innerHTML = InkIcons.svg('globe', 15);
+    const host = document.createElement('span');
+    host.className = 'ctx-host';
+    host.textContent = hostOf(page.url);
+    host.title = page.url;
+    const count = document.createElement('span');
+    count.className = 'ctx-count';
+    const total = matches.length + (page.drawings ? 1 : 0);
+    count.textContent = total ? `${total} saved` : '';
+    head.append(host, count);
+    box.appendChild(head);
+
+    if (matches.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'ctx-list';
+      for (const { note, samePage } of matches.slice(0, 5)) {
+        const li = document.createElement('li');
+        li.className = 'ctx-item' + (note.id === state.currentId ? ' active' : '');
+        li.tabIndex = 0;
+        li.innerHTML = InkIcons.svg(note.type === 'drawing' ? 'brush' : 'note', 14);
+        const label = document.createElement('span');
+        label.textContent = note.title || (note.text || 'Untitled').slice(0, 60);
+        li.appendChild(label);
+        if (samePage) {
+          const tag = document.createElement('span');
+          tag.className = 'ctx-tag';
+          tag.textContent = 'This page';
+          li.appendChild(tag);
+        }
+        li.addEventListener('click', () => openNote(note.id));
+        li.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') openNote(note.id);
+        });
+        ul.appendChild(li);
+      }
+      if (matches.length > 5) {
+        const more = document.createElement('li');
+        more.className = 'ctx-empty';
+        more.textContent = `+${matches.length - 5} more · search “${hostOf(page.url)}”`;
+        ul.appendChild(more);
+      }
+      box.appendChild(ul);
+    } else {
+      const empty = document.createElement('p');
+      empty.className = 'ctx-empty';
+      empty.textContent = 'Nothing saved from this site yet.';
+      box.appendChild(empty);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'ctx-actions';
+    const add = document.createElement('button');
+    add.className = 'btn';
+    add.innerHTML = InkIcons.svg('note-plus', 14);
+    add.append('Note for page');
+    add.addEventListener('click', () =>
+      createNote('text', { title: (page.title || hostOf(page.url)).slice(0, 200), sourceUrl: page.url })
+    );
+    const draw = document.createElement('button');
+    draw.className = 'btn';
+    draw.innerHTML = InkIcons.svg('pen', 14);
+    draw.append(page.drawings ? `Show drawings (${page.drawings})` : 'Draw on page');
+    draw.addEventListener('click', annotatePage);
+    actions.append(add, draw);
+    box.appendChild(actions);
+  }
+
+  async function linkCurrentToPage() {
+    const note = currentNote();
+    if (!note || !page.url) return;
+    await saveNow();
+    note.sourceUrl = page.url;
+    note.lastEditor = INSTANCE;
+    await Store.put(note);
+    loadEditor(note, { keepView: true });
+    renderList();
+    toast(`Linked to ${hostOf(page.url)}`);
+  }
+
+  if (!IS_TAB) {
+    chrome.tabs.onActivated.addListener(refreshPageContext);
+    chrome.tabs.onUpdated.addListener((tabId, info) => {
+      if (tabId === page.tabId || info.status === 'complete') refreshPageContext();
+    });
+    chrome.windows.onFocusChanged.addListener(refreshPageContext);
+    chrome.permissions.onAdded.addListener(refreshPageContext);
+    chrome.permissions.onRemoved.addListener(refreshPageContext);
+  }
+
   // ---------- boot ----------
 
   async function init() {
@@ -1364,6 +1564,7 @@
     document.documentElement.classList.toggle('is-tab', IS_TAB);
     state.settings = await Store.getSettings();
     applyTheme();
+    refreshPageContext();
     const notes = await Store.all();
     for (const n of notes) state.notes.set(n.id, n);
     renderList();

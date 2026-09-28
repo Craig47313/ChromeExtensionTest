@@ -25,6 +25,7 @@
         <button class="btn primary" id="newTextBtn" data-icon="note-plus" title="New note">Note</button>
         <button class="btn" id="newDrawBtn" data-icon="brush" title="New drawing">Drawing</button>
       </div>
+      <section id="pageCtx" class="page-ctx" aria-label="Notes for the current page" hidden></section>
       <ul id="noteList" class="note-list" aria-label="Notes"></ul>
       <div id="listEmpty" class="list-empty" hidden></div>
     </aside>
@@ -81,6 +82,7 @@
         <div id="drawPane" class="pane draw-pane" hidden>
           <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
             <div class="tool-group" id="toolGroup">
+              <button class="tool" data-tool="select" data-icon="select" title="Select (V) · drag to move, corner to resize, Delete to remove, double-click text to edit"></button>
               <button class="tool" data-tool="pen" data-icon="pen" title="Pen (P)"></button>
               <button class="tool" data-tool="highlighter" data-icon="highlighter" title="Highlighter (H)"></button>
               <button class="tool" data-tool="eraser" data-icon="eraser" title="Eraser (E)"></button>
