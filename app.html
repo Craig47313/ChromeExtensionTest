@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inkwell</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar">
+      <header class="side-head">
+        <div class="brand"><img src="icons/icon-32.png" alt="" width="22" height="22"><span>Inkwell</span></div>
+        <div class="head-actions">
+          <button class="icon-btn" id="themeBtn" title="Theme"></button>
+          <button class="icon-btn" id="appMenuBtn" data-icon="more" title="More options" aria-haspopup="menu"></button>
+        </div>
+      </header>
+      <div class="search">
+        <span class="search-icon" data-icon="search" data-size="16"></span>
+        <input id="search" type="search" placeholder="Search notes" autocomplete="off" aria-label="Search notes">
+      </div>
+      <div class="new-row">
+        <button class="btn primary" id="newTextBtn" data-icon="note-plus" title="New note">Note</button>
+        <button class="btn" id="newDrawBtn" data-icon="brush" title="New drawing">Drawing</button>
+      </div>
+      <ul id="noteList" class="note-list" aria-label="Notes"></ul>
+      <div id="listEmpty" class="list-empty" hidden></div>
+    </aside>
+
+    <main class="main">
+      <div id="emptyState" class="empty-state">
+        <img src="icons/icon-128.png" alt="" width="72" height="72">
+        <h2>Capture anything</h2>
+        <p>Pick a note on the left, or start something new.</p>
+        <div class="empty-actions">
+          <button class="btn primary" data-new="text" data-icon="note-plus">New note</button>
+          <button class="btn" data-new="drawing" data-icon="brush">New drawing</button>
+        </div>
+      </div>
+
+      <section id="editor" class="editor" hidden>
+        <header class="editor-head">
+          <button class="icon-btn back-btn" id="backBtn" data-icon="back" title="All notes"></button>
+          <input id="titleInput" class="title-input" placeholder="Untitled" maxlength="200" aria-label="Title">
+          <span id="saveStatus" class="save-status" aria-live="polite"></span>
+          <button class="icon-btn" id="pinBtn" data-icon="pin" title="Pin to top"></button>
+          <button class="icon-btn" id="noteMenuBtn" data-icon="more" title="Note options" aria-haspopup="menu"></button>
+        </header>
+
+        <div id="textPane" class="pane text-pane">
+          <div class="fmt-bar" id="fmtBar" role="toolbar" aria-label="Formatting">
+            <button data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+            <button data-cmd="strike" title="Strikethrough"><s>S</s></button>
+            <span class="fmt-sep"></span>
+            <button data-cmd="h1" title="Heading 1 (# )">H1</button>
+            <button data-cmd="h2" title="Heading 2 (## )">H2</button>
+            <span class="fmt-sep"></span>
+            <button data-cmd="ul" data-icon="list" title="Bulleted list (- )"></button>
+            <button data-cmd="ol" data-icon="list-ordered" title="Numbered list (1. )"></button>
+            <button data-cmd="check" data-icon="list-checks" title="Checklist ([] )"></button>
+            <span class="fmt-sep"></span>
+            <button data-cmd="quote" data-icon="quote" data-size="16" title="Quote (> )"></button>
+            <button data-cmd="code" data-icon="code" title="Code block (``` )"></button>
+            <button data-cmd="link" data-icon="link" title="Link"></button>
+            <button data-cmd="hr" data-icon="minus" title="Divider"></button>
+            <button data-cmd="clear" data-icon="clear-format" title="Clear formatting"></button>
+          </div>
+          <div class="rich-scroll">
+            <div id="rich" class="rich" contenteditable="true" spellcheck="true" data-placeholder="Start writing…" aria-label="Note body"></div>
+          </div>
+          <footer class="pane-foot">
+            <span id="wordCount"></span>
+            <a id="sourceLink" target="_blank" rel="noopener noreferrer" hidden></a>
+          </footer>
+        </div>
+
+        <div id="drawPane" class="pane draw-pane" hidden>
+          <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
+            <div class="tool-group" id="toolGroup">
+              <button class="tool" data-tool="pen" data-icon="pen" title="Pen (P)"></button>
+              <button class="tool" data-tool="highlighter" data-icon="highlighter" title="Highlighter (H)"></button>
+              <button class="tool" data-tool="eraser" data-icon="eraser" title="Eraser (E)"></button>
+              <button class="tool" data-tool="line" data-icon="line" title="Line (L) · Shift snaps angle"></button>
+              <button class="tool" data-tool="arrow" data-icon="arrow" title="Arrow (A)"></button>
+              <button class="tool" data-tool="rect" data-icon="rect" title="Rectangle (R) · Shift for square"></button>
+              <button class="tool" data-tool="ellipse" data-icon="ellipse" title="Ellipse (O) · Shift for circle"></button>
+              <button class="tool" data-tool="text" data-icon="text" title="Text (T) · click text to edit"></button>
+              <button class="tool" data-tool="hand" data-icon="hand" title="Pan (M or hold Space)"></button>
+            </div>
+            <div class="swatches" id="swatches"></div>
+            <label class="size-ctl" title="Brush size ([ and ])">
+              <span class="size-dot" id="sizeDot"></span>
+              <input type="range" id="sizeRange" min="1" max="60" aria-label="Brush size">
+            </label>
+            <div class="draw-actions">
+              <select id="bgSelect" class="select" title="Paper" aria-label="Paper style">
+                <option value="none">Plain</option>
+                <option value="dots">Dots</option>
+                <option value="grid">Grid</option>
+                <option value="lines">Lined</option>
+              </select>
+              <button class="icon-btn" data-draw="image" data-icon="image" title="Insert image (or paste / drop one)"></button>
+              <button class="icon-btn" data-draw="undo" data-icon="undo" title="Undo (Ctrl+Z)"></button>
+              <button class="icon-btn" data-draw="redo" data-icon="redo" title="Redo (Ctrl+Shift+Z)"></button>
+              <button class="icon-btn" data-draw="clear" data-icon="trash" title="Clear canvas"></button>
+              <button class="zoom-btn" data-draw="zoom" id="zoomBtn" title="Zoom · click to fit drawing (Ctrl+scroll to zoom)">100%</button>
+            </div>
+          </div>
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="inkCanvas"></canvas>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="promptDialog">
+    <form method="dialog">
+      <label id="promptLabel" for="promptInput"></label>
+      <input id="promptInput" autocomplete="off">
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input type="file" id="importInput" accept="application/json,.json" hidden>
+  <input type="file" id="imageInput" accept="image/*" hidden>
+
+  <script src="lib/icons.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="lib/ink-canvas.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
