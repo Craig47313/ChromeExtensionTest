@@ -21,9 +21,11 @@
         <span class="search-icon" data-icon="search" data-size="16"></span>
         <input id="search" type="search" placeholder="Search notes" autocomplete="off" aria-label="Search notes">
       </div>
+      <button id="quickCalc" class="quick-calc" title="Click to copy" hidden></button>
       <div class="new-row">
         <button class="btn primary" id="newTextBtn" data-icon="note-plus" title="New note">Note</button>
         <button class="btn" id="newDrawBtn" data-icon="brush" title="New drawing">Drawing</button>
+        <button class="btn" id="newCalcBtn" data-icon="function" title="New calculator / graph">Calc</button>
       </div>
       <section id="pageCtx" class="page-ctx" aria-label="Notes for the current page" hidden></section>
       <ul id="noteList" class="note-list" aria-label="Notes"></ul>
@@ -38,6 +40,7 @@
         <div class="empty-actions">
           <button class="btn primary" data-new="text" data-icon="note-plus">New note</button>
           <button class="btn" data-new="drawing" data-icon="brush">New drawing</button>
+          <button class="btn" data-new="calc" data-icon="function">Calculator</button>
         </div>
       </div>
 
@@ -118,6 +121,25 @@
             <canvas id="inkCanvas"></canvas>
           </div>
         </div>
+
+        <div id="calcPane" class="pane calc-pane" hidden>
+          <div class="calc-side">
+            <div class="calc-bar">
+              <button class="btn" id="calcAddBtn" data-icon="plus" title="Add expression (Enter)">Expression</button>
+              <span class="calc-hint">Try <code>y = x^2</code>, <code>a = 3</code>, <code>(1, 2)</code></span>
+              <button class="chip" id="calcAngleBtn">RAD</button>
+            </div>
+            <div id="calcRows" class="calc-rows"></div>
+          </div>
+          <div class="calc-graph">
+            <canvas id="graphCanvas" aria-label="Graph"></canvas>
+            <div class="graph-ctl">
+              <button data-graph="in" title="Zoom in" data-icon="plus"></button>
+              <button data-graph="out" title="Zoom out" data-icon="minus"></button>
+              <button data-graph="home" title="Reset view (double-click graph)" data-icon="home"></button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -141,6 +163,9 @@
   <script src="lib/icons.js"></script>
   <script src="lib/store.js"></script>
   <script src="lib/ink-canvas.js"></script>
+  <script src="lib/mathlib.js"></script>
+  <script src="lib/graph.js"></script>
+  <script src="calc.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

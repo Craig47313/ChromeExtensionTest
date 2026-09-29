@@ -319,3 +319,102 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
   .draw-actions { margin-left: 0; }
   .size-ctl input { width: 76px; }
 }
+
+/* ---------- per-note delete in the list ---------- */
+
+.note-item { position: relative; align-items: flex-start; }
+.note-del {
+  flex: none; align-self: center; display: grid; place-items: center; width: 30px; height: 30px; margin-right: -4px;
+  border: 0; border-radius: 8px; background: none; color: var(--muted); opacity: 0.55; cursor: pointer;
+}
+.note-item:hover .note-del, .note-item:focus-within .note-del { opacity: 1; }
+.note-del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); opacity: 1; }
+
+/* ---------- search-box calculator ---------- */
+
+.quick-calc {
+  display: flex; align-items: baseline; gap: 8px; margin: -2px 12px 10px; padding: 8px 12px; width: calc(100% - 24px);
+  border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); cursor: pointer; text-align: left;
+  font: 600 18px/1.3 "Cambria Math", "STIX Two Math", "Times New Roman", serif; color: var(--text);
+}
+.quick-calc .hint { margin-left: auto; font: 12px system-ui, sans-serif; color: var(--muted); }
+.quick-calc:hover { border-color: var(--accent); }
+
+.new-row { grid-template-columns: repeat(3, 1fr); }
+.new-row .btn { padding: 0 8px; }
+
+/* ---------- calculator ---------- */
+
+.calc-pane { flex-direction: row; border-top: 1px solid var(--border); }
+.calc-side { display: flex; flex-direction: column; width: 360px; flex: none; min-height: 0; border-right: 1px solid var(--border); background: var(--surface); }
+.calc-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.calc-bar .btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.calc-hint { flex: 1; min-width: 0; font-size: 11.5px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.calc-hint code { font-size: 11px; padding: 0 3px; border-radius: 4px; background: var(--surface); }
+.chip {
+  height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  font-size: 12px; font-weight: 650; cursor: pointer; color: var(--text);
+}
+.chip:hover { border-color: var(--accent); }
+.chip.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+.calc-rows { flex: 1; overflow-y: auto; min-height: 60px; cursor: text; }
+.calc-row { display: flex; min-height: 64px; border-bottom: 1px solid var(--border); background: var(--surface); cursor: auto; }
+.row-gutter {
+  position: relative; flex: none; width: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--surface-2); border-right: 1px solid var(--border);
+}
+.row-num { position: absolute; top: 3px; left: 5px; font-size: 11px; color: var(--muted); }
+.calc-row.active .row-gutter { background: var(--accent); }
+.calc-row.active .row-num { color: var(--accent-contrast); }
+.row-icon { width: 32px; height: 32px; padding: 0; border: 0; background: none; display: grid; place-items: center; border-radius: 50%; cursor: default; }
+.row-icon.graphable { background: currentColor; cursor: pointer; width: 30px; height: 30px; }
+.row-icon.graphable.off { background: transparent; box-shadow: inset 0 0 0 2.5px currentColor; }
+.row-icon.graphable.off svg { display: none; }
+.row-icon.warn { cursor: help; }
+.row-main { flex: 1; min-width: 0; padding: 8px 4px 8px 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.row-input {
+  width: 100%; border: 0; outline: none; background: transparent; color: var(--text); padding: 4px 0;
+  font: 20px/1.3 "Cambria Math", "STIX Two Math", "Times New Roman", serif;
+}
+.row-input::placeholder { font-size: 14px; font-family: system-ui, sans-serif; color: var(--muted); opacity: 0.7; }
+.row-extra:empty { display: none; }
+.row-result {
+  align-self: flex-end; display: inline-flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; cursor: pointer;
+  font: 18px/1.3 "Cambria Math", "STIX Two Math", "Times New Roman", serif; color: var(--text);
+}
+.row-result .eq { color: var(--muted); }
+.row-result .val { padding: 2px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); }
+.row-result:hover .val { border-color: var(--accent); }
+.row-result.copied .val { border-color: #2f9e44; color: #2f9e44; }
+.row-slider { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.row-slider input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.row-sliders { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 13px; color: var(--muted); }
+.row-sliders .chip { font: italic 600 15px "Cambria Math", "Times New Roman", serif; min-width: 34px; }
+.row-sliders .chip.primary { font: 600 12px system-ui, sans-serif; }
+.row-msg { font-size: 12px; color: #d9480f; }
+:root[data-theme="dark"] .row-msg { color: #ffa94d; }
+.row-del {
+  flex: none; align-self: flex-start; width: 34px; height: 34px; margin: 6px 4px 0 0; padding: 0; border: 0; border-radius: 8px;
+  display: grid; place-items: center; background: none; color: var(--muted); opacity: 0.5; cursor: pointer;
+}
+.calc-row:hover .row-del, .calc-row.active .row-del { opacity: 1; }
+.row-del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+.calc-graph { position: relative; flex: 1; min-width: 0; min-height: 0; background: var(--paper); }
+.calc-graph canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.graph-ctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+.graph-ctl button {
+  width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); color: var(--text); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); cursor: pointer;
+}
+.graph-ctl button:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 720px) {
+  .calc-pane { flex-direction: column-reverse; }
+  .calc-side { width: auto; flex: 1; border-right: 0; border-top: 1px solid var(--border); }
+  .calc-graph { flex: none; height: 42%; min-height: 200px; }
+  .calc-hint { display: none; }
+  .calc-bar .btn { flex: 1; }
+  .new-row .btn svg { display: none; }
+}

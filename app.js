@@ -11,6 +11,7 @@
   const PALETTE = ['ink', '#e03131', '#f08c00', '#fcc419', '#2f9e44', '#1971c2', '#7048e8', '#e64980'];
   const THEMES = ['system', 'light', 'dark'];
   const THEME_ICONS = { system: 'monitor', light: 'sun', dark: 'moon' };
+  const TYPE_ICONS = { text: 'note', drawing: 'brush', calc: 'function' };
 
   const state = {
     notes: new Map(),
@@ -34,6 +35,8 @@
     pinBtn: $('#pinBtn'),
     textPane: $('#textPane'),
     drawPane: $('#drawPane'),
+    calcPane: $('#calcPane'),
+    quickCalc: $('#quickCalc'),
     rich: $('#rich'),
     fmtBar: $('#fmtBar'),
     wordCount: $('#wordCount'),
@@ -369,6 +372,7 @@
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     els.themeBtn.innerHTML = InkIcons.svg(THEME_ICONS[t] || 'monitor');
     els.themeBtn.title = `Theme: ${t[0].toUpperCase()}${t.slice(1)}`;
+    if (calc) calc.setDark(dark, cssVar('--paper'));
     if (ink) {
       ink.inkColor = dark ? '#ececf1' : '#1e1e2e';
       ink.paper = cssVar('--paper');
@@ -406,14 +410,14 @@
 
       const thumb = document.createElement('div');
       thumb.className = 'note-thumb';
-      if (n.type === 'drawing' && n.thumb) {
+      if (n.type !== 'text' && n.thumb) {
         const img = document.createElement('img');
         img.src = n.thumb;
         img.alt = '';
         img.loading = 'lazy';
         thumb.appendChild(img);
       } else {
-        thumb.innerHTML = InkIcons.svg(n.type === 'drawing' ? 'brush' : 'note', 20);
+        thumb.innerHTML = InkIcons.svg(TYPE_ICONS[n.type] || 'note', 20);
       }
 
       const body = document.createElement('div');
@@ -426,30 +430,47 @@
       title.appendChild(titleText);
       const snippet = document.createElement('div');
       snippet.className = 'note-snippet';
-      snippet.textContent = n.type === 'drawing' ? n.text || 'Drawing' : (n.text || 'No text yet').slice(0, 200);
+      snippet.textContent = (n.text || { drawing: 'Drawing', calc: 'Calculator' }[n.type] || 'No text yet').slice(0, 200);
       const date = document.createElement('div');
       date.className = 'note-date';
       date.textContent = formatDate(n.updated);
       body.append(title, snippet, date);
 
-      li.append(thumb, body);
+      const del = document.createElement('button');
+      del.className = 'note-del';
+      del.dataset.del = n.id;
+      del.title = 'Delete note';
+      del.setAttribute('aria-label', `Delete ${n.title || 'note'}`);
+      del.innerHTML = InkIcons.svg('trash', 17);
+      li.append(thumb, body, del);
       frag.appendChild(li);
     }
     els.list.replaceChildren(frag);
 
-    els.listEmpty.hidden = notes.length > 0;
+    els.listEmpty.hidden = notes.length > 0 || !els.quickCalc.hidden;
     els.listEmpty.textContent = all.length ? `No notes match “${state.query.trim()}”.` : 'No notes yet. Create one above!';
     renderPageContext();
   }
 
   els.list.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      deleteNote(del.dataset.del);
+      return;
+    }
     const item = e.target.closest('.note-item');
     if (item) openNote(item.dataset.id);
   });
   els.list.addEventListener('keydown', (e) => {
     const item = e.target.closest('.note-item');
     if (!item) return;
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.target !== item) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      const next = item.nextElementSibling || item.previousElementSibling;
+      deleteNote(item.dataset.id).then(() => next && els.list.querySelector(`[data-id="${next.dataset.id}"]`)?.focus());
+    } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       openNote(item.dataset.id);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -460,13 +481,18 @@
 
   els.search.addEventListener('input', () => {
     state.query = els.search.value;
+    updateQuickCalc();
     renderList();
   });
   els.search.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       els.search.value = '';
       state.query = '';
+      updateQuickCalc();
       renderList();
+    } else if (e.key === 'Enter' && !els.quickCalc.hidden) {
+      e.preventDefault();
+      copyQuickCalc();
     } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
       const first = els.list.querySelector('.note-item');
       if (first) {
@@ -485,6 +511,7 @@
   function isBlank(note) {
     if (!note || note.title) return false;
     if (note.type === 'drawing') return !(note.drawing && note.drawing.shapes && note.drawing.shapes.length);
+    if (note.type === 'calc') return !(note.calc && note.calc.rows && note.calc.rows.some((r) => r.text.trim()));
     return !(note.text || '').trim() && !/<img/i.test(note.html || '');
   }
 
@@ -526,11 +553,16 @@
     if (document.activeElement !== els.title) els.title.value = note.title || '';
     els.pinBtn.classList.toggle('on', !!note.pinned);
     els.pinBtn.title = note.pinned ? 'Unpin' : 'Pin to top';
-    const isText = note.type !== 'drawing';
+    const isText = note.type === 'text';
     els.textPane.hidden = !isText;
-    els.drawPane.hidden = isText;
+    els.drawPane.hidden = note.type !== 'drawing';
+    els.calcPane.hidden = note.type !== 'calc';
 
-    if (isText) {
+    if (note.type === 'calc') {
+      ensureCalc();
+      calc.load(note.calc);
+      requestAnimationFrame(() => calc.graph.resize());
+    } else if (isText) {
       els.rich.innerHTML = sanitizeHtml(note.html) || '<p><br></p>';
       updateTextMeta();
       if (note.sourceUrl) {
@@ -573,6 +605,7 @@
       type,
       html: type === 'text' ? '<p><br></p>' : '',
       drawing: type === 'drawing' ? { v: 1, background: state.settings.paper || 'dots', shapes: [] } : null,
+      calc: type === 'calc' ? { v: 1, rows: [{ text: '' }] } : undefined,
       lastEditor: INSTANCE,
       ...extra,
     });
@@ -586,14 +619,20 @@
   }
 
   async function deleteCurrent() {
-    const note = currentNote();
-    if (!note) return;
-    await saveNow();
-    const snapshot = { ...state.notes.get(note.id) };
-    state.notes.delete(note.id);
-    await Store.remove(note.id);
-    showEmpty();
-    toast('Note deleted', {
+    if (state.currentId) await deleteNote(state.currentId);
+  }
+
+  async function deleteNote(id) {
+    if (!state.notes.has(id)) return;
+    const isCurrent = id === state.currentId;
+    if (isCurrent) await saveNow();
+    const snapshot = { ...state.notes.get(id) };
+    state.notes.delete(id);
+    await Store.remove(id);
+    if (isCurrent) showEmpty();
+    else renderList();
+    const label = snapshot.title ? `“${snapshot.title.slice(0, 40)}” deleted` : 'Note deleted';
+    toast(label, {
       action: 'Undo',
       onAction: async () => {
         state.notes.set(snapshot.id, snapshot);
@@ -649,7 +688,11 @@
     if (!note) return;
     state.saving = (async () => {
       note.title = els.title.value.trim();
-      if (note.type === 'drawing') {
+      if (note.type === 'calc') {
+        note.calc = calc.toJSON();
+        note.text = calc.plainText();
+        note.thumb = calc.rows.some((r) => r.text.trim()) ? calc.thumbnail() : null;
+      } else if (note.type === 'drawing') {
         ink.commitText();
         note.drawing = ink.toJSON();
         note.text = ink.shapes.filter((s) => s.type === 'text').map((s) => s.text).join(' ');
@@ -1152,6 +1195,52 @@
     ink.addImage(src, width, height, ink.toWorld(e.clientX - r.left, e.clientY - r.top));
   });
 
+  // ---------- calculator ----------
+
+  let calc = null;
+
+  function ensureCalc() {
+    if (calc) return calc;
+    calc = new CalcEditor({
+      rowsEl: $('#calcRows'),
+      canvas: $('#graphCanvas'),
+      angleBtn: $('#calcAngleBtn'),
+      onChange: scheduleSave,
+    });
+    applyTheme();
+    return calc;
+  }
+
+  $('#calcAddBtn').addEventListener('click', () => calc.insertRow(calc.rows.length, ''));
+  els.calcPane.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-graph]');
+    if (!b) return;
+    if (b.dataset.graph === 'in') calc.graph.zoom(1.5);
+    else if (b.dataset.graph === 'out') calc.graph.zoom(1 / 1.5);
+    else calc.graph.home();
+  });
+
+  // Typing math in the search box shows the answer.
+  function updateQuickCalc() {
+    const q = els.search.value.trim();
+    const looksLikeMath = /\d/.test(q) && /[-+*/^!%()×÷√]|\b(sqrt|sin|cos|tan|log|ln|pi)\b/.test(q);
+    const value = looksLikeMath ? InkMath.quick(q) : null;
+    els.quickCalc.hidden = value === null;
+    if (value === null) return;
+    els.quickCalc.textContent = `= ${InkMath.format(value)}`;
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = 'Enter to copy';
+    els.quickCalc.appendChild(hint);
+    els.quickCalc.dataset.value = String(value);
+  }
+
+  async function copyQuickCalc() {
+    await navigator.clipboard.writeText(els.quickCalc.dataset.value).catch(() => {});
+    toast(`Copied ${InkMath.format(Number(els.quickCalc.dataset.value))}`);
+  }
+  els.quickCalc.addEventListener('click', copyQuickCalc);
+
   // ---------- global keyboard & paste ----------
 
   function isEditableTarget(t) {
@@ -1214,7 +1303,9 @@
     const note = currentNote();
     if (!note) return;
     const name = slugify(note.title);
-    if (note.type === 'drawing') {
+    if (note.type === 'calc') {
+      download(`${name}.png`, dataUrlToBlob(calc.graph.canvas.toDataURL('image/png')));
+    } else if (note.type === 'drawing') {
       const url = await ink.toImage({ type: 'image/png', scale: 2 });
       if (!url) return toast('Nothing to export yet');
       download(`${name}.png`, dataUrlToBlob(url));
@@ -1229,7 +1320,10 @@
     const note = currentNote();
     if (!note) return;
     try {
-      if (note.type === 'drawing') {
+      if (note.type === 'calc') {
+        await navigator.clipboard.writeText(calc.rows.map((r) => r.text).filter((t) => t.trim()).join('\n'));
+        toast('Expressions copied');
+      } else if (note.type === 'drawing') {
         const url = await ink.toImage({ type: 'image/png', scale: 2 });
         if (!url) return toast('Nothing to copy yet');
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': dataUrlToBlob(url) })]);
@@ -1246,10 +1340,15 @@
   $('#noteMenuBtn').addEventListener('click', (e) => {
     const note = currentNote();
     if (!note) return;
-    const drawing = note.type === 'drawing';
+    const labels = {
+      text: ['Download as Markdown', 'Copy as Markdown'],
+      drawing: ['Download as PNG', 'Copy as image'],
+      calc: ['Download graph as PNG', 'Copy expressions'],
+    }[note.type] || ['Download', 'Copy'];
     openMenu(e.currentTarget, [
-      { icon: 'download', label: drawing ? 'Download as PNG' : 'Download as Markdown', run: exportCurrent },
-      { icon: 'copy', label: drawing ? 'Copy as image' : 'Copy as Markdown', run: copyCurrent },
+      { icon: 'download', label: labels[0], run: exportCurrent },
+      { icon: 'copy', label: labels[1], run: copyCurrent },
+      note.type === 'calc' && { icon: 'clear-canvas', label: 'Clear all expressions', run: () => calc.clear() },
       { icon: 'plus', label: 'Duplicate', run: duplicateCurrent },
       note.sourceUrl && { icon: 'external', label: 'Open source page', run: () => window.open(note.sourceUrl, '_blank', 'noopener') },
       page.url && pageKey(page.url) !== pageKey(note.sourceUrl) && { icon: 'link', label: 'Link to current page', run: linkCurrentToPage },
@@ -1295,7 +1394,7 @@
       if (!Array.isArray(incoming)) throw new Error('No notes found in file');
       let count = 0;
       for (const raw of incoming) {
-        if (!raw || typeof raw.id !== 'string' || !['text', 'drawing'].includes(raw.type)) continue;
+        if (!raw || typeof raw.id !== 'string' || !['text', 'drawing', 'calc'].includes(raw.type)) continue;
         const existing = state.notes.get(raw.id);
         if (existing && existing.updated >= (raw.updated || 0)) continue;
         const note = Store.createNote({ ...raw, html: raw.type === 'text' ? sanitizeHtml(raw.html) : '', lastEditor: INSTANCE });
@@ -1323,6 +1422,7 @@
 
   $('#newTextBtn').addEventListener('click', () => createNote('text'));
   $('#newDrawBtn').addEventListener('click', () => createNote('drawing'));
+  $('#newCalcBtn').addEventListener('click', () => createNote('calc'));
   for (const b of $$('[data-new]')) b.addEventListener('click', () => createNote(b.dataset.new));
   els.pinBtn.addEventListener('click', togglePin);
   $('#deleteNoteBtn').addEventListener('click', deleteCurrent);
@@ -1496,7 +1596,7 @@
         const li = document.createElement('li');
         li.className = 'ctx-item' + (note.id === state.currentId ? ' active' : '');
         li.tabIndex = 0;
-        li.innerHTML = InkIcons.svg(note.type === 'drawing' ? 'brush' : 'note', 14);
+        li.innerHTML = InkIcons.svg(TYPE_ICONS[note.type] || 'note', 14);
         const label = document.createElement('span');
         label.textContent = note.title || (note.text || 'Untitled').slice(0, 60);
         li.appendChild(label);

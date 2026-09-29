@@ -21,6 +21,17 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 - Undo/redo, export to PNG, copy as an image
 - Drawings are stored as vectors, so they stay sharp at any zoom level
 
+**Calculator and graphing (Desmos-style)**
+- A **Calc** note type: a numbered list of expressions next to a live graph. Each row has an ✕ to delete it.
+- Plain math shows its answer (`1348 - 4` = 1344). Click the answer to copy it.
+- Anything with `x` is graphed: `x^2 - 3`, `y = sin(x)`, `f(x) = x^2/4`. `x = 2` draws a vertical line and `(1, 2)` plots a point.
+- Variables and sliders: `a = 3` gets a slider. If you use an undefined letter, an **add slider** button appears for it.
+- Define your own functions and reuse them: `g(t) = 2t` then `g(4)`
+- Implicit multiplication (`2x`, `3(x+1)`, `2pi`), `|x|`, `5!`, `%`, and functions such as `sin cos tan asin acos atan sqrt cbrt ln log exp abs floor ceil round min max mod gcd lcm nCr nPr`. Switch between radians and degrees with one button.
+- Drag to pan and scroll to zoom. Hover over a curve to see coordinates. Click a row's color dot to hide that curve, or right-click it to change the color.
+- Download the graph as a PNG, or copy the expressions
+- Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer, then press Enter to copy it
+
 **Draw on any web page**
 - Press **Alt+Shift+D**, right-click and choose **Draw on this page**, or use **⋯ → Draw on current page** in the panel
 - Annotations stay attached to the page as you scroll, and they're saved for that URL
@@ -39,7 +50,7 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 - **Save link to Inkwell** and **Save this page to Inkwell** save links
 
 **Organizing**
-- Instant search, pinned notes, duplicate, delete with undo
+- Instant search, pinned notes, duplicate, and a delete button on every note (with undo)
 - Light, dark and system themes
 - Full backup and restore as JSON
 - The side panel and any open Inkwell tabs stay in sync
