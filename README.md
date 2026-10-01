@@ -7,8 +7,16 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 **Rich-text notes**
 - Bold, italic, underline, strikethrough, headings, bulleted/numbered lists, **checklists**, quotes, code blocks, links and dividers
 - Markdown-style shortcuts: at the start of a line type `#`, `##`, `-`, `1.`, `[]`, `>` or ```` ``` ```` and then a space
-- Paste or drop images. Pasted web content is cleaned of scripts and styles.
+- Images, whether pasted, dropped or inserted, always sit on their own line, with the text continuing below
+- **Inline sketches:** insert a fixed-size sketch (or a copy of one of your stickies) into a note. Double-click it to edit.
+- Paste rich content: pasted web content is cleaned of scripts and styles
 - Export a note to Markdown, or copy it as Markdown
+
+**New ▾ menu:** create a Note, Drawing, Sticky or Calculator, or open Quick calc
+
+**Stickies**
+- Fixed-size drawings (wide, square, tall or banner) on colored paper, made for quick sketches
+- You can insert them into any note as inline sketches
 
 **Drawing notes**
 - Pen, highlighter, eraser, line, arrow, rectangle, ellipse, text and pan tools
@@ -22,15 +30,18 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 - Drawings are stored as vectors, so they stay sharp at any zoom level
 
 **Calculator and graphing (Desmos-style)**
-- A **Calc** note type: a numbered list of expressions next to a live graph. Each row has an ✕ to delete it.
+- A **Calculator** note type: a numbered list of expressions next to a live graph. Each row has an ✕ to delete it, and like Desmos there's always an empty row at the bottom for the next expression.
+- **Points of interest:** gray dots mark zeros, intersections between curves, maxima/minima and y-intercepts. Hover over a dot to see its coordinates, or click it to pin them.
+- **Graph settings (wrench icon):** switch radians/degrees, toggle the grid, minor gridlines, axis numbers and axes, set the exact x/y view range, add axis labels, use a square grid, and choose which points of interest to show
+- **Quick calc** (the calculator icon in the header, or Ctrl+Alt+C) is a scratch calculator that isn't saved to your notes. Press **✓ Save** to keep it.
 - Plain math shows its answer (`1348 - 4` = 1344). Click the answer to copy it.
 - Anything with `x` is graphed: `x^2 - 3`, `y = sin(x)`, `f(x) = x^2/4`. `x = 2` draws a vertical line and `(1, 2)` plots a point.
 - Variables and sliders: `a = 3` gets a slider. If you use an undefined letter, an **add slider** button appears for it.
 - Define your own functions and reuse them: `g(t) = 2t` then `g(4)`
-- Implicit multiplication (`2x`, `3(x+1)`, `2pi`), `|x|`, `5!`, `%`, and functions such as `sin cos tan asin acos atan sqrt cbrt ln log exp abs floor ceil round min max mod gcd lcm nCr nPr`. Switch between radians and degrees with one button.
+- Implicit multiplication (`2x`, `3(x+1)`, `2pi`), `|x|`, `5!`, `%`, and functions such as `sin cos tan asin acos atan sqrt cbrt ln log exp abs floor ceil round min max mod gcd lcm nCr nPr`.
 - Drag to pan and scroll to zoom. Hover over a curve to see coordinates. Click a row's color dot to hide that curve, or right-click it to change the color.
 - Download the graph as a PNG, or copy the expressions
-- Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer, then press Enter to copy it
+- Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer. Press Enter to copy it, or Ctrl+Enter to open it in Quick calc.
 
 **Draw on any web page**
 - Press **Alt+Shift+D**, right-click and choose **Draw on this page**, or use **⋯ → Draw on current page** in the panel
@@ -51,7 +62,7 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 
 **Organizing**
 - Instant search, pinned notes, duplicate, and a delete button on every note (with undo)
-- Light, dark and system themes
+- Light, dark and system themes, plus color palettes (⋯ → Appearance). The default palette, **Monitry**, matches the Monitry product suite; Indigo, Ocean, Rose, Amber and Graphite are also available.
 - Full backup and restore as JSON
 - The side panel and any open Inkwell tabs stay in sync
 
@@ -70,7 +81,7 @@ Requires Chrome 116 or later.
 | --- | --- | --- |
 | Chrome | Alt+Shift+N | Open Inkwell side panel |
 | Chrome | Alt+Shift+D | Draw on the current page (press again or Esc to exit) |
-| App | Ctrl+Alt+N / Ctrl+Alt+D | New note / new drawing |
+| App | Ctrl+Alt+N / Ctrl+Alt+D / Ctrl+Alt+C | New note / new drawing / Quick calc |
 | App | / | Search |
 | Notes | Ctrl+B / I / U, Ctrl+K | Bold / italic / underline, insert link |
 | Notes | Tab / Shift+Tab | Indent / outdent list items |
@@ -104,7 +115,11 @@ Nothing is sent over the network. All data stays in your browser profile.
 manifest.json         MV3 manifest
 background.js         service worker: side panel, context menus, commands, screenshots
 app.html/.css/.js     the notes app (side panel and full tab)
-lib/ink-canvas.js     vector drawing engine shared by drawing notes and the page overlay
+calc.js               calculator editor (expression rows, sliders, graph settings)
+lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/sketches)
+lib/mathlib.js        safe math parser/evaluator (no eval)
+lib/graph.js          graph renderer with points of interest
+lib/palettes.js       color palettes (Monitry default)
 lib/store.js          chrome.storage wrapper
 lib/icons.js          inline SVG icon set
 content/annotate.js   on-page drawing overlay (injected on demand, isolated in a closed shadow root)
