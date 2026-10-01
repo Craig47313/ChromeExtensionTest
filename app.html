@@ -13,6 +13,7 @@
       <header class="side-head">
         <div class="brand"><img src="icons/icon-32.png" alt="" width="22" height="22"><span>Inkwell</span></div>
         <div class="head-actions">
+          <button class="icon-btn" id="quickCalcBtn" data-icon="calculator" title="Quick calc (not saved)"></button>
           <button class="icon-btn" id="themeBtn" title="Theme"></button>
           <button class="icon-btn" id="appMenuBtn" data-icon="more" title="More options" aria-haspopup="menu"></button>
         </div>
@@ -23,9 +24,9 @@
       </div>
       <button id="quickCalc" class="quick-calc" title="Click to copy" hidden></button>
       <div class="new-row">
-        <button class="btn primary" id="newTextBtn" data-icon="note-plus" title="New note">Note</button>
-        <button class="btn" id="newDrawBtn" data-icon="brush" title="New drawing">Drawing</button>
-        <button class="btn" id="newCalcBtn" data-icon="function" title="New calculator / graph">Calc</button>
+        <button class="btn primary new-btn" id="newBtn" aria-haspopup="menu" title="Create something new">
+          <span data-icon="plus"></span><span class="new-label">New</span><span class="new-caret" data-icon="chevron-down" data-size="16"></span>
+        </button>
       </div>
       <section id="pageCtx" class="page-ctx" aria-label="Notes for the current page" hidden></section>
       <ul id="noteList" class="note-list" aria-label="Notes"></ul>
@@ -38,8 +39,9 @@
         <h2>Capture anything</h2>
         <p>Pick a note on the left, or start something new.</p>
         <div class="empty-actions">
-          <button class="btn primary" data-new="text" data-icon="note-plus">New note</button>
-          <button class="btn" data-new="drawing" data-icon="brush">New drawing</button>
+          <button class="btn primary" data-new="text" data-icon="note-plus">Note</button>
+          <button class="btn" data-new="drawing" data-icon="brush">Drawing</button>
+          <button class="btn" data-new="sticky" data-icon="sticky">Sticky</button>
           <button class="btn" data-new="calc" data-icon="function">Calculator</button>
         </div>
       </div>
@@ -49,6 +51,7 @@
           <button class="icon-btn back-btn" id="backBtn" data-icon="back" title="All notes"></button>
           <input id="titleInput" class="title-input" placeholder="Untitled" maxlength="200" aria-label="Title">
           <span id="saveStatus" class="save-status" aria-live="polite"></span>
+          <button class="btn primary save-scratch" id="saveScratchBtn" data-icon="check" title="Save this calculation to your notes">Save</button>
           <button class="icon-btn" id="pinBtn" data-icon="pin" title="Pin to top"></button>
           <button class="icon-btn danger" id="deleteNoteBtn" data-icon="trash" title="Delete note"></button>
           <button class="icon-btn" id="noteMenuBtn" data-icon="more" title="Note options" aria-haspopup="menu"></button>
@@ -72,10 +75,18 @@
             <button data-cmd="code" data-icon="code" title="Code block (``` )"></button>
             <button data-cmd="link" data-icon="link" title="Link"></button>
             <button data-cmd="hr" data-icon="minus" title="Divider"></button>
+            <span class="fmt-sep"></span>
+            <button data-cmd="image" data-icon="image" title="Insert image (or paste / drop one)"></button>
+            <button data-cmd="sketch" data-icon="sticky" title="Insert a sketch or one of your stickies"></button>
+            <span class="fmt-sep"></span>
             <button data-cmd="clear" data-icon="clear-format" title="Clear formatting"></button>
           </div>
           <div class="rich-scroll">
             <div id="rich" class="rich" contenteditable="true" spellcheck="true" data-placeholder="Start writing…" aria-label="Note body"></div>
+            <div id="figTools" class="fig-tools" hidden>
+              <button data-fig="edit" data-icon="edit" data-size="16" title="Edit sketch">Edit</button>
+              <button data-fig="delete" data-icon="trash" data-size="16" title="Remove"></button>
+            </div>
           </div>
           <footer class="pane-foot">
             <span id="wordCount"></span>
@@ -84,6 +95,11 @@
         </div>
 
         <div id="drawPane" class="pane draw-pane" hidden>
+          <div id="sketchBar" class="sketch-bar" hidden>
+            <span data-icon="sticky" data-size="16"></span>
+            <span>Editing a sketch in this note</span>
+            <button class="btn primary" id="sketchDoneBtn" data-icon="check">Done</button>
+          </div>
           <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
             <div class="tool-group" id="toolGroup">
               <button class="tool" data-tool="select" data-icon="select" title="Select (V) · drag to move, corner to resize, Delete to remove, double-click text to edit"></button>
@@ -103,6 +119,20 @@
               <input type="range" id="sizeRange" min="1" max="60" aria-label="Brush size">
             </label>
             <div class="draw-actions">
+              <select id="paperColorSelect" class="select fixed-only" title="Paper color" aria-label="Paper color">
+                <option value="#ffffff">White</option>
+                <option value="#fff3bf">Yellow</option>
+                <option value="#ffdeeb">Pink</option>
+                <option value="#d0ebff">Blue</option>
+                <option value="#d3f9d8">Green</option>
+                <option value="#e5dbff">Lavender</option>
+              </select>
+              <select id="frameSelect" class="select fixed-only" title="Size" aria-label="Sketch size">
+                <option value="480x320">Wide</option>
+                <option value="400x400">Square</option>
+                <option value="320x440">Tall</option>
+                <option value="640x240">Banner</option>
+              </select>
               <select id="bgSelect" class="select" title="Paper" aria-label="Paper style">
                 <option value="none">Plain</option>
                 <option value="dots">Dots</option>
@@ -118,26 +148,16 @@
             </div>
           </div>
           <div class="canvas-wrap" id="canvasWrap">
-            <canvas id="inkCanvas"></canvas>
+            <div class="canvas-frame" id="canvasFrame"><canvas id="inkCanvas"></canvas></div>
           </div>
         </div>
 
         <div id="calcPane" class="pane calc-pane" hidden>
           <div class="calc-side">
-            <div class="calc-bar">
-              <button class="btn" id="calcAddBtn" data-icon="plus" title="Add expression (Enter)">Expression</button>
-              <span class="calc-hint">Try <code>y = x^2</code>, <code>a = 3</code>, <code>(1, 2)</code></span>
-              <button class="chip" id="calcAngleBtn">RAD</button>
-            </div>
             <div id="calcRows" class="calc-rows"></div>
           </div>
-          <div class="calc-graph">
+          <div class="calc-graph" id="calcGraph">
             <canvas id="graphCanvas" aria-label="Graph"></canvas>
-            <div class="graph-ctl">
-              <button data-graph="in" title="Zoom in" data-icon="plus"></button>
-              <button data-graph="out" title="Zoom out" data-icon="minus"></button>
-              <button data-graph="home" title="Reset view (double-click graph)" data-icon="home"></button>
-            </div>
           </div>
         </div>
       </section>
@@ -157,10 +177,28 @@
     </form>
   </dialog>
 
+  <dialog id="appearanceDialog" class="appearance">
+    <form method="dialog">
+      <h3>Appearance</h3>
+      <div class="ap-label">Theme</div>
+      <div class="gs-seg" id="themeSeg">
+        <button type="button" data-theme="system">System</button>
+        <button type="button" data-theme="light">Light</button>
+        <button type="button" data-theme="dark">Dark</button>
+      </div>
+      <div class="ap-label">Color palette</div>
+      <div class="palette-grid" id="paletteGrid"></div>
+      <div class="dialog-actions">
+        <button class="btn primary" value="ok">Done</button>
+      </div>
+    </form>
+  </dialog>
+
   <input type="file" id="importInput" accept="application/json,.json" hidden>
   <input type="file" id="imageInput" accept="image/*" hidden>
 
   <script src="lib/icons.js"></script>
+  <script src="lib/palettes.js"></script>
   <script src="lib/store.js"></script>
   <script src="lib/ink-canvas.js"></script>
   <script src="lib/mathlib.js"></script>

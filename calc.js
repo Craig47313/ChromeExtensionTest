@@ -5,10 +5,11 @@
   const COLORS = ['#c74440', '#2d70b3', '#388c46', '#6042a6', '#fa7e19', '#1e1e2e'];
   const GRAPHABLE = new Set(['graph', 'vline', 'point']);
   const INK = '#1e1e2e'; // the black curve color, flipped to light ink in dark mode
+  const DEFAULT_SETTINGS = { angle: 'rad', ...GraphView.DEFAULT_OPTIONS };
   const newId = () => Math.random().toString(36).slice(2, 10);
 
-  const LIGHT = { minor: 'rgba(20,20,40,.05)', major: 'rgba(20,20,40,.13)', axis: 'rgba(20,20,40,.62)', text: 'rgba(20,20,40,.66)' };
-  const DARK = { minor: 'rgba(255,255,255,.05)', major: 'rgba(255,255,255,.12)', axis: 'rgba(255,255,255,.6)', text: 'rgba(255,255,255,.68)' };
+  const LIGHT = { minor: 'rgba(20,20,20,.05)', major: 'rgba(20,20,20,.13)', axis: 'rgba(20,20,20,.62)', text: 'rgba(20,20,20,.68)', poi: '#7d7d7d' };
+  const DARK = { minor: 'rgba(255,255,255,.05)', major: 'rgba(255,255,255,.12)', axis: 'rgba(255,255,255,.6)', text: 'rgba(255,255,255,.7)', poi: '#9a9a9a' };
 
   function niceBound(v) {
     const a = Math.abs(v);
@@ -17,30 +18,44 @@
     return Math.ceil(a / p) * p;
   }
 
+  function el(tag, props = {}, children = []) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') n.className = v;
+      else if (k === 'html') n.innerHTML = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else if (k in n) n[k] = v;
+      else n.setAttribute(k, v);
+    }
+    for (const c of [].concat(children)) if (c != null) n.append(c);
+    return n;
+  }
+
   class CalcEditor {
-    constructor({ rowsEl, canvas, angleBtn, onChange }) {
+    constructor({ rowsEl, canvas, graphEl, onChange }) {
       this.rowsEl = rowsEl;
-      this.angleBtn = angleBtn;
+      this.graphEl = graphEl;
       this.onChange = onChange || (() => {});
       this.rows = [];
-      this.angle = 'rad';
+      this.settings = { ...DEFAULT_SETTINGS };
       this.dark = false;
       this.results = [];
       this.els = new Map(); // row id → elements
-      this.graph = new GraphView(canvas, { onViewChange: () => this.onChange() });
+      this.graph = new GraphView(canvas, {
+        onViewChange: () => {
+          this._syncRangeInputs();
+          this.onChange();
+        },
+        onSelect: (rowId) => this.select(rowId, { focus: true }),
+      });
 
-      rowsEl.addEventListener('click', (e) => {
+      // Clicking the blank area under the list jumps to the empty last row.
+      rowsEl.addEventListener('mousedown', (e) => {
         if (e.target !== rowsEl) return;
-        // Clicking the empty space below the list focuses/creates a trailing row.
-        const last = this.rows[this.rows.length - 1];
-        if (last && !last.text.trim()) this.focusRow(last.id);
-        else this.insertRow(this.rows.length, '');
+        e.preventDefault();
+        this.focusRow(this.rows[this.rows.length - 1].id);
       });
-      angleBtn.addEventListener('click', () => {
-        this.angle = this.angle === 'rad' ? 'deg' : 'rad';
-        this.update();
-        this.onChange();
-      });
+      this._buildControls();
     }
 
     // ---------- data ----------
@@ -50,20 +65,30 @@
       this.rows = (Array.isArray(d.rows) ? d.rows : [])
         .filter((r) => r && typeof r.text === 'string')
         .map((r, i) => ({ id: r.id || newId(), text: r.text, color: r.color || COLORS[i % COLORS.length], hidden: !!r.hidden }));
-      if (!this.rows.length) this.rows.push(this._newRow(''));
-      this.angle = d.angle === 'deg' ? 'deg' : 'rad';
-      this.graph.setView(d.view && Number.isFinite(d.view.scale) ? d.view : { cx: 0, cy: 0, scale: 40 });
+      this.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
+      if (d.angle && !(d.settings && d.settings.angle)) this.settings.angle = d.angle === 'deg' ? 'deg' : 'rad';
+      this.graph.setOptions(this.settings);
+      this.graph.setView(d.view);
+      this.graph.setSelected(null);
+      this._ensureTrailing(false);
       this.renderRows();
       this.update();
+      this._syncSettings();
     }
 
     toJSON() {
+      const rows = this.rows.slice();
+      while (rows.length && !rows[rows.length - 1].text.trim()) rows.pop();
       return {
-        v: 1,
-        angle: this.angle,
+        v: 2,
+        settings: { ...this.settings },
         view: { ...this.graph.view },
-        rows: this.rows.map(({ id, text, color, hidden }) => ({ id, text, color, hidden })),
+        rows: rows.map(({ id, text, color, hidden }) => ({ id, text, color, hidden })),
       };
+    }
+
+    isEmpty() {
+      return !this.rows.some((r) => r.text.trim());
     }
 
     plainText() {
@@ -85,14 +110,27 @@
     }
 
     _newRow(text) {
-      const used = new Set(this.rows.map((r) => r.color));
+      const used = new Set(this.rows.filter((r) => r.text.trim()).map((r) => r.color));
       const color = COLORS.find((c) => !used.has(c)) || COLORS[this.rows.length % COLORS.length];
       return { id: newId(), text, color, hidden: false };
+    }
+
+    // Desmos-style: there's always one empty row at the bottom.
+    _ensureTrailing(dom = true) {
+      const last = this.rows[this.rows.length - 1];
+      if (last && !last.text.trim()) return;
+      const row = this._newRow('');
+      this.rows.push(row);
+      if (dom) {
+        this.rowsEl.appendChild(this._rowEl(row));
+        this._renumber();
+      }
     }
 
     insertRow(index, text, { focus = true } = {}) {
       const row = this._newRow(text);
       this.rows.splice(index, 0, row);
+      this._ensureTrailing(false);
       this.renderRows();
       this.update();
       this.onChange();
@@ -104,7 +142,8 @@
       const i = this.rows.findIndex((r) => r.id === id);
       if (i < 0) return;
       this.rows.splice(i, 1);
-      if (!this.rows.length) this.rows.push(this._newRow(''));
+      this._ensureTrailing(false);
+      if (this.graph.selected === id) this.graph.setSelected(null);
       this.renderRows();
       this.update();
       this.onChange();
@@ -112,100 +151,111 @@
     }
 
     focusRow(id, atEnd = true) {
-      const el = this.els.get(id);
-      if (!el) return;
-      el.input.focus();
-      if (atEnd) el.input.setSelectionRange(el.input.value.length, el.input.value.length);
+      const e = this.els.get(id);
+      if (!e) return;
+      e.input.focus();
+      if (atEnd) e.input.setSelectionRange(e.input.value.length, e.input.value.length);
+    }
+
+    select(rowId, { focus = false } = {}) {
+      this.graph.setSelected(rowId);
+      for (const [id, e] of this.els) e.el.classList.toggle('selected', id === rowId);
+      if (rowId && focus) {
+        const e = this.els.get(rowId);
+        if (e) {
+          e.el.scrollIntoView({ block: 'nearest' });
+          this.focusRow(rowId);
+        }
+      }
     }
 
     clear() {
-      this.rows = [this._newRow('')];
+      this.rows = [];
+      this._ensureTrailing(false);
+      this.graph.setSelected(null);
       this.renderRows();
       this.update();
       this.onChange();
     }
 
-    // ---------- rendering ----------
+    // ---------- rows ----------
 
     renderRows() {
-      const frag = document.createDocumentFragment();
       this.els.clear();
+      this.rowsEl.replaceChildren(...this.rows.map((r) => this._rowEl(r)));
+      this._renumber();
+    }
+
+    _renumber() {
       this.rows.forEach((row, i) => {
-        const el = document.createElement('div');
-        el.className = 'calc-row';
-        el.dataset.id = row.id;
-
-        const gutter = document.createElement('div');
-        gutter.className = 'row-gutter';
-        const num = document.createElement('span');
-        num.className = 'row-num';
-        num.textContent = i + 1;
-        const icon = document.createElement('button');
-        icon.className = 'row-icon';
-        icon.tabIndex = -1;
-        icon.addEventListener('click', () => {
-          const r = this.rows.find((x) => x.id === row.id);
-          if (!r || !GRAPHABLE.has((this.results[this.rows.indexOf(r)] || {}).kind)) return;
-          r.hidden = !r.hidden;
-          this.update();
-          this.onChange();
-        });
-        icon.addEventListener('contextmenu', (e) => {
-          // Right-click cycles the curve color.
-          e.preventDefault();
-          const r = this.rows.find((x) => x.id === row.id);
-          r.color = COLORS[(COLORS.indexOf(r.color) + 1) % COLORS.length];
-          this.update();
-          this.onChange();
-        });
-        gutter.append(num, icon);
-
-        const main = document.createElement('div');
-        main.className = 'row-main';
-        const input = document.createElement('input');
-        input.className = 'row-input';
-        input.value = row.text;
-        input.spellcheck = false;
-        input.autocomplete = 'off';
-        input.setAttribute('aria-label', `Expression ${i + 1}`);
-        if (i === 0 && this.rows.length === 1 && !row.text) input.placeholder = 'Type math, e.g. 2+2, y = x^2, a = 3';
-        input.addEventListener('input', () => {
-          row.text = input.value;
-          this.update();
-          this.onChange();
-        });
-        input.addEventListener('keydown', (e) => this._onKey(e, row));
-        input.addEventListener('focus', () => el.classList.add('active'));
-        input.addEventListener('blur', () => el.classList.remove('active'));
-        const extra = document.createElement('div');
-        extra.className = 'row-extra';
-        main.append(input, extra);
-
-        const del = document.createElement('button');
-        del.className = 'row-del';
-        del.title = 'Delete expression';
-        del.setAttribute('aria-label', `Delete expression ${i + 1}`);
-        del.innerHTML = InkIcons.svg('x', 18);
-        del.addEventListener('click', () => this.deleteRow(row.id));
-
-        el.append(gutter, main, del);
-        frag.appendChild(el);
-        this.els.set(row.id, { el, icon, input, extra });
+        const e = this.els.get(row.id);
+        if (!e) return;
+        e.num.textContent = i + 1;
+        e.input.setAttribute('aria-label', `Expression ${i + 1}`);
+        const trailing = i === this.rows.length - 1 && !row.text.trim();
+        e.el.classList.toggle('trailing', trailing);
+        e.input.placeholder = this.rows.length === 1 ? 'Type math: 2+2, y = x^2, a = 3, (1, 2)' : '';
       });
-      this.rowsEl.replaceChildren(frag);
+    }
+
+    _rowEl(row) {
+      const num = el('span', { class: 'row-num' });
+      const icon = el('button', { class: 'row-icon', tabIndex: -1 });
+      icon.addEventListener('click', () => {
+        if (!GRAPHABLE.has((this.results[this.rows.indexOf(row)] || {}).kind)) return;
+        row.hidden = !row.hidden;
+        this.update();
+        this.onChange();
+      });
+      icon.addEventListener('contextmenu', (e) => {
+        // Right-click cycles the curve color.
+        e.preventDefault();
+        row.color = COLORS[(COLORS.indexOf(row.color) + 1) % COLORS.length];
+        this.update();
+        this.onChange();
+      });
+      const input = el('input', { class: 'row-input', value: row.text, spellcheck: false, autocomplete: 'off' });
+      const extra = el('div', { class: 'row-extra' });
+      const del = el('button', { class: 'row-del', title: 'Delete expression', html: InkIcons.svg('x', 18) });
+      del.setAttribute('aria-label', 'Delete expression');
+      del.addEventListener('click', () => this.deleteRow(row.id));
+      const node = el('div', { class: 'calc-row' }, [el('div', { class: 'row-gutter' }, [num, icon]), el('div', { class: 'row-main' }, [input, extra]), del]);
+      node.dataset.id = row.id;
+
+      input.addEventListener('input', () => {
+        row.text = input.value;
+        this._ensureTrailing();
+        this._renumber();
+        this.update();
+        this.onChange();
+      });
+      input.addEventListener('keydown', (e) => this._onKey(e, row));
+      input.addEventListener('focus', () => {
+        node.classList.add('active');
+        this.select(GRAPHABLE.has((this.results[this.rows.indexOf(row)] || {}).kind) ? row.id : null);
+      });
+      input.addEventListener('blur', () => {
+        node.classList.remove('active');
+        // Show any error message once the user leaves the row.
+        const i = this.rows.indexOf(row);
+        if (i >= 0 && this.results[i]) this._renderExtra(row, this.results[i], this.els.get(row.id));
+      });
+      this.els.set(row.id, { el: node, num, icon, input, extra });
+      return node;
     }
 
     _onKey(e, row) {
       const i = this.rows.indexOf(row);
-      const el = this.els.get(row.id);
+      const e2 = this.els.get(row.id);
       if (e.key === 'Enter') {
         e.preventDefault();
         const next = this.rows[i + 1];
         if (next && !next.text.trim()) this.focusRow(next.id);
         else this.insertRow(i + 1, '');
-      } else if (e.key === 'Backspace' && !el.input.value && this.rows.length > 1) {
+      } else if (e.key === 'Backspace' && !e2.input.value && this.rows.length > 1 && i > 0) {
         e.preventDefault();
-        this.deleteRow(row.id, { focusPrev: true });
+        if (i === this.rows.length - 1) this.focusRow(this.rows[i - 1].id);
+        else this.deleteRow(row.id, { focusPrev: true });
       } else if (e.key === 'ArrowUp' && i > 0) {
         e.preventDefault();
         this.focusRow(this.rows[i - 1].id);
@@ -216,22 +266,20 @@
     }
 
     // Re-evaluate everything and refresh results, icons and the graph.
-    update() {
-      this.angleBtn.textContent = this.angle.toUpperCase();
-      this.angleBtn.title = this.angle === 'rad' ? 'Angles in radians (click for degrees)' : 'Angles in degrees (click for radians)';
-      this.results = InkMath.evaluate(this.rows, { angle: this.angle });
+    update({ skip } = {}) {
+      this.results = InkMath.evaluate(this.rows, { angle: this.settings.angle });
       const items = [];
       this.rows.forEach((row, i) => {
         const res = this.results[i];
-        const els = this.els.get(row.id);
-        if (els) this._renderExtra(row, res, els);
-        if (GRAPHABLE.has(res.kind) && !row.hidden) items.push({ ...res, color: this.shown(row.color) });
+        const e = this.els.get(row.id);
+        if (e && row !== skip) this._renderExtra(row, res, e);
+        if (GRAPHABLE.has(res.kind) && !row.hidden) items.push({ ...res, color: this.shown(row.color), rowId: row.id });
       });
       this.graph.setItems(items);
     }
 
-    _renderExtra(row, res, { el, icon, extra }) {
-      el.classList.toggle('error', res.kind === 'error');
+    _renderExtra(row, res, { el: node, icon, extra, input }) {
+      node.classList.toggle('error', res.kind === 'error');
       icon.className = 'row-icon';
       icon.style.color = this.shown(row.color);
       icon.title = '';
@@ -252,17 +300,9 @@
       }
 
       extra.textContent = '';
-      extra.className = 'row-extra';
       if (res.kind === 'value' || (res.kind === 'def' && res.value !== undefined)) {
-        const out = document.createElement('button');
-        out.className = 'row-result';
-        out.title = 'Copy result';
-        const text = InkMath.format(res.value);
-        out.innerHTML = '<span class="eq">=</span>';
-        const val = document.createElement('span');
-        val.className = 'val';
-        val.textContent = text;
-        out.appendChild(val);
+        const val = el('span', { class: 'val' }, InkMath.format(res.value));
+        const out = el('button', { class: 'row-result', title: 'Copy result', html: '<span class="eq">=</span>' }, val);
         out.addEventListener('click', () => {
           navigator.clipboard.writeText(String(res.value)).catch(() => {});
           out.classList.add('copied');
@@ -273,75 +313,164 @@
         extra.appendChild(this._slider(row, res));
       } else if (res.kind === 'error') {
         if (res.missing && res.missing.length) {
-          const wrap = document.createElement('div');
-          wrap.className = 'row-sliders';
-          wrap.append('add slider:');
-          const names = res.missing;
           const add = (list) => {
             const idx = this.rows.indexOf(row);
             list.forEach((n, k) => this.insertRow(idx + 1 + k, `${n} = 1`, { focus: false }));
           };
-          for (const n of names) {
-            const b = document.createElement('button');
-            b.className = 'chip';
-            b.textContent = n;
-            b.addEventListener('click', () => add([n]));
-            wrap.appendChild(b);
-          }
-          if (names.length > 1) {
-            const all = document.createElement('button');
-            all.className = 'chip primary';
-            all.textContent = 'all';
-            all.addEventListener('click', () => add(names));
-            wrap.appendChild(all);
-          }
+          const wrap = el('div', { class: 'row-sliders' }, 'add slider:');
+          for (const n of res.missing) wrap.appendChild(el('button', { class: 'chip', onclick: () => add([n]) }, n));
+          if (res.missing.length > 1) wrap.appendChild(el('button', { class: 'chip primary', onclick: () => add(res.missing) }, 'all'));
           extra.appendChild(wrap);
-        } else if (document.activeElement !== this.els.get(row.id).input) {
-          const msg = document.createElement('div');
-          msg.className = 'row-msg';
-          msg.textContent = res.message;
-          extra.appendChild(msg);
+        } else if (document.activeElement !== input) {
+          extra.appendChild(el('div', { class: 'row-msg' }, res.message));
         }
       }
     }
 
     _slider(row, res) {
-      const wrap = document.createElement('div');
-      wrap.className = 'row-slider';
       const bound = niceBound(res.value);
       const min = res.value < 0 || bound > 10 ? -bound : -10;
       const max = bound;
-      const lo = document.createElement('span');
-      lo.textContent = InkMath.format(min);
-      const hi = document.createElement('span');
-      hi.textContent = InkMath.format(max);
-      const range = document.createElement('input');
-      range.type = 'range';
-      range.min = min;
-      range.max = max;
-      range.step = (max - min) / 200;
-      range.value = res.value;
+      const range = el('input', { type: 'range', min, max, step: (max - min) / 200, value: res.value });
       range.setAttribute('aria-label', `${res.name} slider`);
       range.addEventListener('input', () => {
         const step = Number(range.step);
         const v = Math.round(Number(range.value) / step) * step;
-        const text = `${res.name} = ${parseFloat(v.toPrecision(6))}`;
-        row.text = text;
-        const els = this.els.get(row.id);
-        els.input.value = text;
-        // Refresh the graph without rebuilding this slider mid-drag.
-        this.results = InkMath.evaluate(this.rows, { angle: this.angle });
-        const items = [];
-        this.rows.forEach((r, i) => {
-          const rr = this.results[i];
-          if (r !== row && this.els.get(r.id)) this._renderExtra(r, rr, this.els.get(r.id));
-          if (GRAPHABLE.has(rr.kind) && !r.hidden) items.push({ ...rr, color: this.shown(r.color) });
-        });
-        this.graph.setItems(items);
+        row.text = `${res.name} = ${parseFloat(v.toPrecision(6))}`;
+        this.els.get(row.id).input.value = row.text;
+        this.update({ skip: row }); // don't rebuild this slider mid-drag
         this.onChange();
       });
-      wrap.append(lo, range, hi);
-      return wrap;
+      return el('div', { class: 'row-slider' }, [el('span', {}, InkMath.format(min)), range, el('span', {}, InkMath.format(max))]);
+    }
+
+    // ---------- graph controls & settings ----------
+
+    _buildControls() {
+      const ctl = el('div', { class: 'graph-ctl' });
+      const btn = (name, title, icon, fn) => {
+        const b = el('button', { title, html: InkIcons.svg(icon, 18), onclick: fn });
+        b.dataset.graph = name;
+        return b;
+      };
+      this.settingsBtn = btn('settings', 'Graph settings', 'wrench', () => this.toggleSettings());
+      ctl.append(
+        this.settingsBtn,
+        el('div', { class: 'ctl-gap' }),
+        btn('in', 'Zoom in', 'plus', () => this.graph.zoom(1.5)),
+        btn('out', 'Zoom out', 'minus', () => this.graph.zoom(1 / 1.5)),
+        btn('home', 'Default view (double-click graph)', 'home', () => this.graph.home())
+      );
+
+      const check = (key, label) => {
+        const box = el('input', { type: 'checkbox', onchange: (e) => this._set({ [key]: e.target.checked }) });
+        box.dataset.key = key;
+        return el('label', { class: 'gs-check' }, [box, label]);
+      };
+      const numInput = (key) => {
+        const i = el('input', { class: 'gs-num', spellcheck: false });
+        i.dataset.key = key;
+        const apply = () => this._applyRange();
+        i.addEventListener('change', apply);
+        i.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            apply();
+            i.blur();
+          }
+        });
+        return i;
+      };
+      const seg = (key, options) =>
+        el(
+          'div',
+          { class: 'gs-seg' },
+          options.map(([value, label]) => {
+            const b = el('button', { onclick: () => this._set({ [key]: value }) }, label);
+            b.dataset.value = value;
+            b.dataset.key = key;
+            return b;
+          })
+        );
+      const labelInput = (key, ph) => {
+        const i = el('input', { class: 'gs-text', placeholder: ph, maxLength: 24 });
+        i.dataset.key = key;
+        i.addEventListener('input', () => this._set({ [key]: i.value }));
+        return i;
+      };
+
+      this.panel = el('div', { class: 'graph-settings', hidden: true, role: 'dialog' }, [
+        el('div', { class: 'gs-title' }, 'Graph settings'),
+        seg('angle', [['rad', 'Radians'], ['deg', 'Degrees']]),
+        el('div', { class: 'gs-grid' }, [check('grid', 'Grid'), check('axisNumbers', 'Axis numbers'), check('minor', 'Minor gridlines'), check('xAxis', 'X-axis'), el('span'), check('yAxis', 'Y-axis')]),
+        el('div', { class: 'gs-sec' }, 'View'),
+        el('div', { class: 'gs-range' }, [numInput('xmin'), el('span', { class: 'gs-var' }, '≤ x ≤'), numInput('xmax')]),
+        el('div', { class: 'gs-range' }, [numInput('ymin'), el('span', { class: 'gs-var' }, '≤ y ≤'), numInput('ymax')]),
+        el('div', { class: 'gs-row' }, [
+          el('button', { class: 'chip', onclick: () => this._squareUp(), title: 'Make one unit the same size on both axes' }, 'Square grid'),
+          el('button', { class: 'chip', onclick: () => this.graph.home() }, 'Default view'),
+        ]),
+        el('div', { class: 'gs-sec' }, 'Axis labels'),
+        el('div', { class: 'gs-row' }, [labelInput('xLabel', 'x-axis, e.g. “time”'), labelInput('yLabel', 'y-axis')]),
+        el('div', { class: 'gs-sec' }, 'Points of interest'),
+        el('p', { class: 'gs-help' }, 'Zeros, intersections, maxima/minima and y-intercepts. Click a gray dot to pin its coordinates.'),
+        seg('poi', [['all', 'All curves'], ['selected', 'Selected'], ['off', 'Off']]),
+      ]);
+      this.graphEl.append(ctl, this.panel);
+
+      document.addEventListener('pointerdown', (e) => {
+        if (!this.panel.hidden && !this.panel.contains(e.target) && !this.settingsBtn.contains(e.target)) this.toggleSettings(false);
+      });
+      this.panel.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.toggleSettings(false);
+      });
+    }
+
+    toggleSettings(open = this.panel.hidden) {
+      this.panel.hidden = !open;
+      this.settingsBtn.classList.toggle('on', open);
+      if (open) this._syncSettings();
+    }
+
+    _set(patch) {
+      Object.assign(this.settings, patch);
+      this.graph.setOptions(this.settings);
+      if ('angle' in patch) this.update();
+      this._syncSettings();
+      this.onChange();
+    }
+
+    _syncSettings() {
+      for (const b of this.panel.querySelectorAll('.gs-seg button')) b.classList.toggle('on', this.settings[b.dataset.key] === b.dataset.value);
+      for (const c of this.panel.querySelectorAll('.gs-check input')) c.checked = !!this.settings[c.dataset.key];
+      for (const t of this.panel.querySelectorAll('.gs-text')) if (document.activeElement !== t) t.value = this.settings[t.dataset.key] || '';
+      this._syncRangeInputs();
+    }
+
+    _syncRangeInputs() {
+      if (!this.panel || this.panel.hidden) return;
+      const b = this.graph.bounds();
+      for (const i of this.panel.querySelectorAll('.gs-num')) if (document.activeElement !== i) i.value = parseFloat(b[i.dataset.key].toPrecision(5));
+    }
+
+    _applyRange() {
+      const vals = {};
+      for (const i of this.panel.querySelectorAll('.gs-num')) {
+        const v = InkMath.quick(i.value) ?? Number(i.value);
+        vals[i.dataset.key] = v;
+        i.classList.toggle('bad', !Number.isFinite(v));
+      }
+      const ok = vals.xmax > vals.xmin && vals.ymax > vals.ymin;
+      for (const i of this.panel.querySelectorAll('.gs-num')) if (!ok) i.classList.add('bad');
+      if (ok && this.graph.setBounds(vals)) this._syncRangeInputs();
+    }
+
+    _squareUp() {
+      const v = this.graph.view;
+      const s = Math.sqrt(v.sx * v.sy);
+      this.graph.setView({ ...v, sx: s, sy: s });
+      this._syncRangeInputs();
+      this.onChange();
     }
   }
 

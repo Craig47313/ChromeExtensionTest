@@ -43,7 +43,7 @@
       border-radius: 9px; cursor: pointer; color: #c4c4cf;
     }
     .btn:hover { background: rgba(255,255,255,.09); color: #fff; }
-    .btn.active { background: #6361e8; color: #fff; }
+    .btn.active { background: var(--accent, #2ea043); color: var(--accent-contrast, #fff); }
     .btn.del { color: #ff8787; }
     .btn.del:hover { background: rgba(255,107,107,.18); color: #ffa8a8; }
     .btn[hidden] { display: none; }
@@ -94,6 +94,17 @@
     </div>
     <div class="toast" role="status"></div>`;
   document.documentElement.appendChild(host);
+
+  // Match the toolbar accent to the palette chosen in Inkwell (dark variant).
+  try {
+    chrome.storage.local.get('settings').then(({ settings }) => {
+      const v = InkPalettes.vars((settings && settings.palette) || InkPalettes.DEFAULT, true);
+      host.style.setProperty('--accent', v.accent);
+      host.style.setProperty('--accent-contrast', v['accent-contrast']);
+    });
+  } catch (_) {
+    /* extension context gone */
+  }
 
   const layer = root.querySelector('.layer');
   const canvas = root.querySelector('canvas');

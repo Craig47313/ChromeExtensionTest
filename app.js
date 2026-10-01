@@ -11,7 +11,10 @@
   const PALETTE = ['ink', '#e03131', '#f08c00', '#fcc419', '#2f9e44', '#1971c2', '#7048e8', '#e64980'];
   const THEMES = ['system', 'light', 'dark'];
   const THEME_ICONS = { system: 'monitor', light: 'sun', dark: 'moon' };
-  const TYPE_ICONS = { text: 'note', drawing: 'brush', calc: 'function' };
+  const TYPE_ICONS = { text: 'note', drawing: 'brush', sticky: 'sticky', calc: 'function' };
+  const SCRATCH_ID = '__quickcalc'; // the unsaved Quick calc
+  const STICKY_DEFAULT = { w: 480, h: 320 };
+  const isInk = (note) => !!note && (note.type === 'drawing' || note.type === 'sticky');
 
   const state = {
     notes: new Map(),
@@ -21,6 +24,9 @@
     dirty: false,
     saveTimer: 0,
     saving: null,
+    scratch: null, // Quick calc pseudo-note
+    sketchEdit: null, // { id } while editing an inline sketch
+    pendingRange: null,
   };
 
   const els = {
@@ -43,6 +49,10 @@
     sourceLink: $('#sourceLink'),
     canvas: $('#inkCanvas'),
     canvasWrap: $('#canvasWrap'),
+    canvasFrame: $('#canvasFrame'),
+    paperColorSelect: $('#paperColorSelect'),
+    frameSelect: $('#frameSelect'),
+    figTools: $('#figTools'),
     swatches: $('#swatches'),
     sizeRange: $('#sizeRange'),
     sizeDot: $('#sizeDot'),
@@ -147,7 +157,7 @@
   function onOutsideMenu(e) {
     if (openMenuEl && !openMenuEl.contains(e.target)) closeMenu();
   }
-  function openMenu(anchor, items) {
+  function openMenu(anchor, items, { align = 'right' } = {}) {
     closeMenu();
     const menu = document.createElement('div');
     menu.className = 'menu';
@@ -163,6 +173,8 @@
       btn.setAttribute('role', 'menuitem');
       btn.innerHTML = InkIcons.svg(item.icon, 16);
       btn.append(item.label);
+      if (item.hint) btn.appendChild(Object.assign(document.createElement('span'), { className: 'menu-hint', textContent: item.hint }));
+      if (item.disabled) btn.disabled = true;
       btn.addEventListener('click', () => {
         closeMenu();
         item.run();
@@ -171,7 +183,9 @@
     }
     document.body.appendChild(menu);
     const r = anchor.getBoundingClientRect();
-    const left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8));
+    const want = align === 'left' ? r.left : r.right - menu.offsetWidth;
+    const left = Math.max(8, Math.min(want, window.innerWidth - menu.offsetWidth - 8));
+    if (align === 'left') menu.style.minWidth = `${Math.max(210, r.width)}px`;
     let top = r.bottom + 4;
     if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - menu.offsetHeight - 4);
     menu.style.left = `${left}px`;
@@ -212,9 +226,9 @@
 
   // ---------- HTML sanitising & markdown ----------
 
-  const ALLOWED_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'A', 'IMG', 'HR', 'MARK', 'SUB', 'SUP']);
+  const ALLOWED_TAGS = new Set(['FIGURE', 'P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'A', 'IMG', 'HR', 'MARK', 'SUB', 'SUP']);
   const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'META', 'LINK', 'TITLE', 'HEAD', 'SVG', 'MATH', 'CANVAS', 'VIDEO', 'AUDIO', 'FORM', 'INPUT', 'BUTTON', 'SELECT', 'TEXTAREA', 'BASE']);
-  const BLOCKISH = /^(SECTION|ARTICLE|HEADER|FOOTER|MAIN|ASIDE|NAV|FIGURE|FIGCAPTION|TABLE|THEAD|TBODY|TFOOT|TR|DL|DT|DD|ADDRESS|DETAILS|SUMMARY|CENTER)$/;
+  const BLOCKISH = /^(SECTION|ARTICLE|HEADER|FOOTER|MAIN|ASIDE|NAV|FIGCAPTION|TABLE|THEAD|TBODY|TFOOT|TR|DL|DT|DD|ADDRESS|DETAILS|SUMMARY|CENTER)$/;
 
   function cleanNode(node, doc) {
     for (const child of [...node.childNodes]) {
@@ -246,7 +260,10 @@
         const value = attr.value.trim();
         let keep = false;
         if (tag === 'A' && name === 'href') keep = /^(https?:|mailto:)/i.test(value);
-        else if (tag === 'IMG' && name === 'src') keep = /^data:image\/(png|jpe?g|gif|webp);/i.test(value) || /^https:\/\//i.test(value);
+        else if (tag === 'FIGURE' && name === 'data-sketch') keep = /^[a-z0-9]{4,40}$/.test(value);
+        else if (tag === 'FIGURE' && name === 'class') {
+          keep = value === 'sketch' || value === 'media';
+        } else if (tag === 'IMG' && name === 'src') keep = /^data:image\/(png|jpe?g|gif|webp);/i.test(value) || /^https:\/\//i.test(value);
         else if (name === 'class') {
           const cls = value.split(/\s+/).filter((c) => c === 'checklist' || c === 'checked');
           if (cls.length) {
@@ -257,6 +274,17 @@
         if (!keep) el.removeAttribute(attr.name);
       }
       if (tag === 'IMG' && !el.hasAttribute('src')) el.remove();
+      if (tag === 'FIGURE') {
+        // Figures are atomic blocks: one image per line, never text beside it.
+        const img = el.querySelector('img');
+        if (!img) {
+          el.remove();
+          continue;
+        }
+        el.replaceChildren(img);
+        el.setAttribute('contenteditable', 'false');
+        if (!el.getAttribute('class')) el.setAttribute('class', 'media');
+      }
     }
   }
 
@@ -271,7 +299,7 @@
   function serializeRich() {
     const clone = els.rich.cloneNode(true);
     for (const p of [...clone.querySelectorAll('p')].reverse()) {
-      if (p.querySelector('p, div, ul, ol, blockquote, pre, h1, h2, h3, hr')) p.replaceWith(...p.childNodes);
+      if (p.querySelector('p, div, ul, ol, blockquote, pre, h1, h2, h3, hr, figure')) p.replaceWith(...p.childNodes);
     }
     return clone.innerHTML;
   }
@@ -349,6 +377,10 @@
         } else if (tag === 'PRE') {
           flush();
           out += '```\n' + c.textContent.replace(/\n$/, '') + '\n```\n\n';
+        } else if (tag === 'FIGURE') {
+          flush();
+          const src = c.querySelector('img')?.getAttribute('src') || '';
+          out += c.classList.contains('sketch') ? '[sketch]\n\n' : /^https:/.test(src) ? `![](${src})\n\n` : '[image]\n\n';
         } else if (tag === 'HR') {
           flush();
           out += '---\n\n';
@@ -370,6 +402,7 @@
     const t = state.settings.theme || 'system';
     const dark = t === 'dark' || (t === 'system' && darkQuery.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    InkPalettes.apply(document.documentElement, state.settings.palette || InkPalettes.DEFAULT, dark);
     els.themeBtn.innerHTML = InkIcons.svg(THEME_ICONS[t] || 'monitor');
     els.themeBtn.title = `Theme: ${t[0].toUpperCase()}${t.slice(1)}`;
     if (calc) calc.setDark(dark, cssVar('--paper'));
@@ -426,11 +459,11 @@
       title.className = 'note-title';
       if (n.pinned) title.insertAdjacentHTML('afterbegin', InkIcons.svg('pin', 13));
       const titleText = document.createElement('span');
-      titleText.textContent = n.title || (n.type === 'text' && n.text ? n.text.slice(0, 60) : 'Untitled');
+      titleText.textContent = n.title || ((n.type === 'text' || n.type === 'calc') && n.text ? n.text.slice(0, 60) : 'Untitled');
       title.appendChild(titleText);
       const snippet = document.createElement('div');
       snippet.className = 'note-snippet';
-      snippet.textContent = (n.text || { drawing: 'Drawing', calc: 'Calculator' }[n.type] || 'No text yet').slice(0, 200);
+      snippet.textContent = (n.text || { drawing: 'Drawing', sticky: 'Sticky', calc: 'Calculator' }[n.type] || 'No text yet').slice(0, 200);
       const date = document.createElement('div');
       date.className = 'note-date';
       date.textContent = formatDate(n.updated);
@@ -446,6 +479,7 @@
       frag.appendChild(li);
     }
     els.list.replaceChildren(frag);
+    $('#quickCalcBtn').classList.toggle('on', state.currentId === SCRATCH_ID);
 
     els.listEmpty.hidden = notes.length > 0 || !els.quickCalc.hidden;
     els.listEmpty.textContent = all.length ? `No notes match “${state.query.trim()}”.` : 'No notes yet. Create one above!';
@@ -490,6 +524,14 @@
       state.query = '';
       updateQuickCalc();
       renderList();
+    } else if (e.key === 'Enter' && !els.quickCalc.hidden && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const expr = els.search.value.trim();
+      els.search.value = '';
+      state.query = '';
+      updateQuickCalc();
+      renderList();
+      openQuickCalc(expr);
     } else if (e.key === 'Enter' && !els.quickCalc.hidden) {
       e.preventDefault();
       copyQuickCalc();
@@ -505,12 +547,13 @@
   // ---------- open / create / delete ----------
 
   function currentNote() {
+    if (state.currentId === SCRATCH_ID) return state.scratch;
     return state.currentId ? state.notes.get(state.currentId) : null;
   }
 
   function isBlank(note) {
     if (!note || note.title) return false;
-    if (note.type === 'drawing') return !(note.drawing && note.drawing.shapes && note.drawing.shapes.length);
+    if (isInk(note)) return !(note.drawing && note.drawing.shapes && note.drawing.shapes.length);
     if (note.type === 'calc') return !(note.calc && note.calc.rows && note.calc.rows.some((r) => r.text.trim()));
     return !(note.text || '').trim() && !/<img/i.test(note.html || '');
   }
@@ -531,7 +574,7 @@
       return;
     }
     await saveNow();
-    const note = state.notes.get(id);
+    const note = id === SCRATCH_ID ? state.scratch : state.notes.get(id);
     if (!note) return;
     if (prev && prev !== id) await discardIfBlank(prev);
 
@@ -545,17 +588,22 @@
 
     if (focus) {
       if (note.type === 'text') placeCaretAtEnd(els.rich);
+      else if (note.type === 'calc') calc.focusRow(calc.rows[calc.rows.length - 1].id);
       else els.canvas.focus({ preventScroll: true }); // so tool shortcuts work right away
     }
   }
 
   function loadEditor(note, { keepView = false } = {}) {
     if (document.activeElement !== els.title) els.title.value = note.title || '';
+    els.title.readOnly = !!note.scratch;
+    els.editor.classList.toggle('is-scratch', !!note.scratch);
     els.pinBtn.classList.toggle('on', !!note.pinned);
     els.pinBtn.title = note.pinned ? 'Unpin' : 'Pin to top';
+    state.sketchEdit = null;
+    $('#sketchBar').hidden = true;
     const isText = note.type === 'text';
     els.textPane.hidden = !isText;
-    els.drawPane.hidden = note.type !== 'drawing';
+    els.drawPane.hidden = !isInk(note);
     els.calcPane.hidden = note.type !== 'calc';
 
     if (note.type === 'calc') {
@@ -578,15 +626,54 @@
         els.sourceLink.hidden = true;
       }
     } else {
-      ensureInk();
-      ink.load(note.drawing, { keepView });
-      els.bgSelect.value = ink.background;
-      requestAnimationFrame(() => {
-        ink.resize();
-        if (!keepView && ink.shapes.some((s) => s.type === 'image')) ink.zoomToFit(24);
-      });
-      syncDrawUI();
+      showInk(note.drawing, { keepView });
     }
+  }
+
+  // Load drawing data into the drawing pane (free canvas or fixed-size sticky/sketch).
+  function showInk(data, { keepView = false } = {}) {
+    ensureInk();
+    ink.load(data, { keepView });
+    const fixed = !!ink.frame;
+    els.drawPane.classList.toggle('fixed', fixed);
+    els.canvasWrap.classList.toggle('fixed', fixed);
+    if (fixed && ink.tool === 'hand') ink.setTool('pen');
+    els.bgSelect.value = ink.background;
+    if (fixed) {
+      els.paperColorSelect.value = ink.paperColor;
+      els.frameSelect.value = `${ink.frame.w}x${ink.frame.h}`;
+    }
+    layoutFrame();
+    requestAnimationFrame(() => {
+      layoutFrame();
+      ink.resize();
+      if (!keepView && !fixed && ink.shapes.some((s) => s.type === 'image')) ink.zoomToFit(24);
+    });
+    syncDrawUI();
+  }
+
+  // Center a fixed-size frame in the drawing area, as large as fits.
+  function layoutFrame() {
+    const frame = els.canvasFrame;
+    if (!ink || !ink.frame) {
+      frame.removeAttribute('style');
+      return;
+    }
+    const wrap = els.canvasWrap.getBoundingClientRect();
+    const pad = wrap.width < 500 ? 12 : 28;
+    const ratio = ink.frame.w / ink.frame.h;
+    let w = Math.max(40, wrap.width - pad * 2);
+    let h = w / ratio;
+    if (h > wrap.height - pad * 2) {
+      h = Math.max(40, wrap.height - pad * 2);
+      w = h * ratio;
+    }
+    Object.assign(frame.style, {
+      left: `${Math.round((wrap.width - w) / 2)}px`,
+      top: `${Math.round((wrap.height - h) / 2)}px`,
+      width: `${Math.round(w)}px`,
+      height: `${Math.round(h)}px`,
+    });
   }
 
   function showEmpty() {
@@ -604,7 +691,12 @@
     const note = Store.createNote({
       type,
       html: type === 'text' ? '<p><br></p>' : '',
-      drawing: type === 'drawing' ? { v: 1, background: state.settings.paper || 'dots', shapes: [] } : null,
+      drawing:
+        type === 'drawing'
+          ? { v: 1, background: state.settings.paper || 'dots', shapes: [] }
+          : type === 'sticky'
+            ? { v: 1, background: 'none', shapes: [], frame: { ...STICKY_DEFAULT }, paperColor: '#fff3bf' }
+            : null,
       calc: type === 'calc' ? { v: 1, rows: [{ text: '' }] } : undefined,
       lastEditor: INSTANCE,
       ...extra,
@@ -687,19 +779,28 @@
     const note = currentNote();
     if (!note) return;
     state.saving = (async () => {
+      if (note.scratch) {
+        // Quick calc lives only for this browser session until you press Save.
+        note.calc = calc.toJSON();
+        await chrome.storage.session.set({ quickCalc: note.calc }).catch(() => {});
+        setStatus(calc.isEmpty() ? '' : 'Not saved');
+        return;
+      }
       note.title = els.title.value.trim();
       if (note.type === 'calc') {
         note.calc = calc.toJSON();
         note.text = calc.plainText();
         note.thumb = calc.rows.some((r) => r.text.trim()) ? calc.thumbnail() : null;
-      } else if (note.type === 'drawing') {
+      } else if (isInk(note)) {
         ink.commitText();
         note.drawing = ink.toJSON();
         note.text = ink.shapes.filter((s) => s.type === 'text').map((s) => s.text).join(' ');
         note.thumb = await ink.toImage({ type: 'image/jpeg', quality: 0.75, maxSize: 360, scale: 1, padding: 16 });
       } else {
+        if (state.sketchEdit) await syncSketch(note);
         note.html = serializeRich();
         note.text = els.rich.innerText.replace(/\s+/g, ' ').trim();
+        pruneSketches(note);
       }
       note.updated = Date.now();
       note.lastEditor = INSTANCE;
@@ -835,7 +936,15 @@
     }
   }
 
+  let imageTarget = 'ink'; // where the shared image picker inserts
   const FORMAT_ACTIONS = {
+    image: () => {
+      imageTarget = 'rich';
+      const sel = getSelection();
+      state.pendingRange = sel.rangeCount && els.rich.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+      $('#imageInput').click();
+    },
+    sketch: () => sketchMenu($('[data-cmd="sketch"]')),
     bold: () => exec('bold'),
     italic: () => exec('italic'),
     underline: () => exec('underline'),
@@ -895,7 +1004,7 @@
     const text = els.rich.innerText.trim();
     const words = text ? text.split(/\s+/).length : 0;
     els.wordCount.textContent = `${words} word${words === 1 ? '' : 's'} · ${text.length} characters`;
-    const empty = !text && !els.rich.querySelector('img, hr, li');
+    const empty = !text && !els.rich.querySelector('img, hr, li, figure');
     els.rich.classList.toggle('is-empty', empty);
   }
 
@@ -996,14 +1105,18 @@
     if (imageItem) {
       e.preventDefault();
       const { src } = await imageFileToDataUrl(imageItem.getAsFile());
-      exec('insertHTML', `<img src="${src}" alt="">`);
-      scheduleSave();
+      insertFigure(imageFigure(src));
       return;
     }
     const html = cd.getData('text/html');
     if (html) {
       e.preventDefault();
-      exec('insertHTML', sanitizeHtml(html));
+      // Pasted images also become their own full-width blocks.
+      const clean = sanitizeHtml(html).replace(/<img\b[^>]*>/g, (tag) => {
+        const m = /src="([^"]+)"/.exec(tag);
+        return m ? `</p>${imageFigure(m[1].replace(/&amp;/g, '&'))}<p>` : '';
+      });
+      exec('insertHTML', sanitizeHtml(clean));
     }
   });
 
@@ -1020,8 +1133,197 @@
         sel.addRange(r);
       }
     }
-    exec('insertHTML', `<img src="${src}" alt="">`);
+    insertFigure(imageFigure(src));
+  });
+
+  // ---------- figures: images and inline sketches ----------
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function imageFigure(src) {
+    return `<figure class="media" contenteditable="false"><img src="${escapeAttr(src)}" alt=""></figure>`;
+  }
+
+  function sketchFigure(id, src) {
+    return `<figure class="sketch" contenteditable="false" data-sketch="${id}"><img src="${escapeAttr(src)}" alt="Sketch"></figure>`;
+  }
+
+  // Insert a figure as its own block (never beside text), then continue
+  // typing on the line after it. Splits the current paragraph at the caret.
+  function insertFigure(html, range) {
+    const rich = els.rich;
+    const sel = getSelection();
+    let r = range;
+    if (!r && sel.rangeCount && rich.contains(sel.anchorNode)) r = sel.getRangeAt(0);
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const fig = tpl.content.firstElementChild;
+    const after = document.createElement('p');
+
+    let block = r ? r.startContainer : null;
+    if (block === rich) block = rich.childNodes[r.startOffset] || null;
+    while (block && block.parentNode !== rich) block = block.parentNode;
+
+    if (!r || !block) {
+      rich.append(fig, after);
+    } else {
+      if (block.nodeType === Node.TEXT_NODE) {
+        const p = document.createElement('p');
+        block.replaceWith(p);
+        p.appendChild(block);
+        block = p;
+      }
+      // Everything after the caret moves to a new block below the figure.
+      const tail = document.createRange();
+      tail.setStart(r.startContainer, r.startOffset);
+      tail.setEndAfter(block.lastChild || block);
+      const rest = tail.extractContents();
+      const restNode = rest.firstElementChild && rest.childNodes.length === 1 && rest.firstElementChild.tagName === block.tagName ? rest.firstElementChild : null;
+      const isEmpty = (n) => !n.textContent.trim() && !n.querySelector('img, figure, hr');
+      let next = after;
+      if (restNode && !isEmpty(restNode)) next = restNode;
+      else if (!restNode && rest.textContent.trim()) after.appendChild(rest);
+      block.after(fig, next);
+      if (isEmpty(block)) block.remove();
+    }
+    const target = fig.nextElementSibling || after;
+    if (!target.firstChild) target.innerHTML = '<br>';
+    rich.focus();
+    const caret = document.createRange();
+    caret.setStart(target, 0);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+    updateTextMeta();
     scheduleSave();
+  }
+
+  function pruneSketches(note) {
+    if (!note.sketches) return;
+    const used = new Set([...els.rich.querySelectorAll('figure[data-sketch]')].map((f) => f.dataset.sketch));
+    for (const id of Object.keys(note.sketches)) if (!used.has(id)) delete note.sketches[id];
+  }
+
+  async function insertSketch(data, range) {
+    const note = currentNote();
+    if (!note || note.type !== 'text') return;
+    const id = Store.newId();
+    note.sketches = { ...(note.sketches || {}), [id]: data };
+    insertFigure(sketchFigure(id, await InkCanvas.renderImage(data)), range);
+    return id;
+  }
+
+  async function openSketch(id) {
+    const note = currentNote();
+    if (!note || !note.sketches || !note.sketches[id]) return;
+    await saveNow();
+    state.sketchEdit = { id };
+    els.textPane.hidden = true;
+    els.drawPane.hidden = false;
+    $('#sketchBar').hidden = false;
+    els.figTools.hidden = true;
+    showInk(note.sketches[id]);
+    els.canvas.focus({ preventScroll: true });
+  }
+
+  // Copy the sketch being edited back into the note (data + preview image).
+  async function syncSketch(note) {
+    const edit = state.sketchEdit;
+    if (!edit || !ink) return;
+    ink.commitText();
+    const data = ink.toJSON();
+    note.sketches = { ...(note.sketches || {}), [edit.id]: data };
+    const img = els.rich.querySelector(`figure[data-sketch="${edit.id}"] img`);
+    if (img) img.src = await ink.toImage({ type: 'image/png', scale: 2 });
+  }
+
+  async function closeSketch() {
+    const note = currentNote();
+    if (!state.sketchEdit || !note) return;
+    await syncSketch(note);
+    const id = state.sketchEdit.id;
+    state.sketchEdit = null;
+    $('#sketchBar').hidden = true;
+    els.drawPane.hidden = true;
+    els.textPane.hidden = false;
+    state.dirty = true;
+    await saveNow();
+    // Continue writing on the line under the sketch.
+    const fig = els.rich.querySelector(`figure[data-sketch="${id}"]`);
+    if (fig) {
+      let next = fig.nextElementSibling;
+      if (!next || next.tagName === 'FIGURE') {
+        next = document.createElement('p');
+        next.innerHTML = '<br>';
+        fig.after(next);
+      }
+      els.rich.focus();
+      const r = document.createRange();
+      r.setStart(next, 0);
+      r.collapse(true);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+      fig.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  $('#sketchDoneBtn').addEventListener('click', closeSketch);
+
+  async function sketchMenu(anchor) {
+    const sel = getSelection();
+    const range = sel.rangeCount && els.rich.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+    const stickies = sortedNotes().filter((n) => n.type === 'sticky').slice(0, 8);
+    const blank = { v: 1, background: 'none', shapes: [], frame: { ...STICKY_DEFAULT }, paperColor: '#ffffff' };
+    openMenu(
+      anchor,
+      [
+        { icon: 'plus', label: 'New sketch', hint: 'drawn right here', run: async () => openSketch(await insertSketch(blank, range)) },
+        stickies.length && '-',
+        ...stickies.map((n) => ({ icon: 'sticky', label: `Insert “${(n.title || n.text || 'Sticky').slice(0, 32)}”`, run: () => insertSketch(structuredClone(n.drawing), range) })),
+      ],
+      { align: 'left' }
+    );
+  }
+
+  // Hover toolbar for figures (edit sketch / remove).
+  let hoverFig = null;
+  els.rich.addEventListener('mousemove', (e) => {
+    const fig = e.target.closest('figure');
+    if (fig === hoverFig) return;
+    hoverFig = fig;
+    if (!fig) {
+      els.figTools.hidden = true;
+      return;
+    }
+    const scroller = els.rich.parentElement;
+    const fr = fig.getBoundingClientRect();
+    const sr = scroller.getBoundingClientRect();
+    els.figTools.hidden = false;
+    els.figTools.querySelector('[data-fig="edit"]').hidden = !fig.classList.contains('sketch');
+    els.figTools.style.top = `${fr.top - sr.top + scroller.scrollTop + 8}px`;
+    els.figTools.style.left = `${fr.right - sr.left - 8}px`;
+  });
+  els.rich.parentElement.addEventListener('mouseleave', () => {
+    hoverFig = null;
+    els.figTools.hidden = true;
+  });
+  els.figTools.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fig]');
+    const fig = hoverFig;
+    if (!b || !fig) return;
+    if (b.dataset.fig === 'edit') openSketch(fig.dataset.sketch);
+    else {
+      fig.remove();
+      hoverFig = null;
+      els.figTools.hidden = true;
+      updateTextMeta();
+      scheduleSave();
+    }
+  });
+  els.rich.addEventListener('dblclick', (e) => {
+    const fig = e.target.closest('figure.sketch');
+    if (fig) openSketch(fig.dataset.sketch);
   });
 
   // ---------- drawing editor ----------
@@ -1146,7 +1448,7 @@
           toast('Canvas cleared', { action: 'Undo', onAction: () => ink.undo() });
         }
         break;
-      case 'image': $('#imageInput').click(); break;
+      case 'image': imageTarget = 'ink'; $('#imageInput').click(); break;
       case 'zoom':
         if (Math.abs(ink.view.scale - 1) < 0.01 && ink.view.x === 0 && ink.view.y === 0) ink.zoomToFit();
         else ink.resetView();
@@ -1175,8 +1477,27 @@
     e.target.value = '';
     if (!file) return;
     const { src, width, height } = await imageFileToDataUrl(file);
+    if (imageTarget === 'rich') {
+      imageTarget = 'ink';
+      insertFigure(imageFigure(src), state.pendingRange);
+      return;
+    }
     ink.addImage(src, width, height);
   });
+
+  els.paperColorSelect.addEventListener('change', () => ink.setFrame({ paperColor: els.paperColorSelect.value }));
+  els.frameSelect.addEventListener('change', () => {
+    const [w, h] = els.frameSelect.value.split('x').map(Number);
+    ink.setFrame({ w, h });
+    layoutFrame();
+    ink.resize();
+  });
+  new ResizeObserver(() => {
+    if (ink && ink.frame) {
+      layoutFrame();
+      ink.resize();
+    }
+  }).observe(els.canvasWrap);
 
   els.canvasWrap.addEventListener('dragover', (e) => {
     if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) {
@@ -1204,21 +1525,57 @@
     calc = new CalcEditor({
       rowsEl: $('#calcRows'),
       canvas: $('#graphCanvas'),
-      angleBtn: $('#calcAngleBtn'),
+      graphEl: $('#calcGraph'),
       onChange: scheduleSave,
     });
     applyTheme();
     return calc;
   }
 
-  $('#calcAddBtn').addEventListener('click', () => calc.insertRow(calc.rows.length, ''));
-  els.calcPane.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-graph]');
-    if (!b) return;
-    if (b.dataset.graph === 'in') calc.graph.zoom(1.5);
-    else if (b.dataset.graph === 'out') calc.graph.zoom(1 / 1.5);
-    else calc.graph.home();
-  });
+  // ---------- quick calc (not saved until you press Save) ----------
+
+  async function openQuickCalc(prefill) {
+    if (!state.scratch) {
+      const { quickCalc } = await chrome.storage.session.get('quickCalc').catch(() => ({}));
+      state.scratch = { id: SCRATCH_ID, type: 'calc', title: 'Quick calc', scratch: true, calc: quickCalc || { v: 2, rows: [] } };
+    }
+    if (prefill) {
+      state.scratch.calc = { ...state.scratch.calc, rows: [...((calc && state.currentId === SCRATCH_ID ? calc.toJSON() : state.scratch.calc).rows || []), { text: prefill }] };
+      if (state.currentId === SCRATCH_ID) {
+        calc.load(state.scratch.calc);
+        state.dirty = true;
+        saveNow();
+        return;
+      }
+    }
+    await openNote(SCRATCH_ID, { focus: true });
+  }
+
+  async function saveScratch() {
+    if (state.currentId !== SCRATCH_ID) return;
+    state.dirty = true;
+    await saveNow();
+    const data = calc.toJSON();
+    if (!data.rows.length) return toast('Type some math first');
+    const note = Store.createNote({ type: 'calc', calc: data, text: calc.plainText(), thumb: calc.thumbnail(), lastEditor: INSTANCE });
+    state.notes.set(note.id, note);
+    await Store.put(note);
+    state.scratch = { id: SCRATCH_ID, type: 'calc', title: 'Quick calc', scratch: true, calc: { v: 2, rows: [], settings: data.settings } };
+    await chrome.storage.session.remove('quickCalc').catch(() => {});
+    state.currentId = null;
+    await openNote(note.id);
+    els.title.focus();
+    toast('Saved to your notes ✓ — give it a name');
+  }
+
+  function clearScratch() {
+    calc.clear();
+    state.dirty = true;
+    saveNow();
+  }
+
+  $('#quickCalcBtn').addEventListener('click', () => openQuickCalc());
+  $('#saveScratchBtn').addEventListener('click', saveScratch);
 
   // Typing math in the search box shows the answer.
   function updateQuickCalc() {
@@ -1230,7 +1587,7 @@
     els.quickCalc.textContent = `= ${InkMath.format(value)}`;
     const hint = document.createElement('span');
     hint.className = 'hint';
-    hint.textContent = 'Enter to copy';
+    hint.textContent = 'Enter: copy · Ctrl+Enter: Quick calc';
     els.quickCalc.appendChild(hint);
     els.quickCalc.dataset.value = String(value);
   }
@@ -1248,7 +1605,7 @@
   }
 
   function drawingActive() {
-    return ink && currentNote()?.type === 'drawing' && !els.drawPane.hidden;
+    return !!ink && !els.drawPane.hidden && !els.editor.hidden;
   }
 
   document.addEventListener('keydown', (e) => {
@@ -1261,6 +1618,11 @@
     if (mod && e.altKey && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       createNote('text');
+      return;
+    }
+    if (mod && e.altKey && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      openQuickCalc();
       return;
     }
     if (mod && e.altKey && e.key.toLowerCase() === 'd') {
@@ -1304,8 +1666,8 @@
     if (!note) return;
     const name = slugify(note.title);
     if (note.type === 'calc') {
-      download(`${name}.png`, dataUrlToBlob(calc.graph.canvas.toDataURL('image/png')));
-    } else if (note.type === 'drawing') {
+      download(`${name}.png`, dataUrlToBlob(calc.graph.toPNG()));
+    } else if (isInk(note)) {
       const url = await ink.toImage({ type: 'image/png', scale: 2 });
       if (!url) return toast('Nothing to export yet');
       download(`${name}.png`, dataUrlToBlob(url));
@@ -1323,7 +1685,7 @@
       if (note.type === 'calc') {
         await navigator.clipboard.writeText(calc.rows.map((r) => r.text).filter((t) => t.trim()).join('\n'));
         toast('Expressions copied');
-      } else if (note.type === 'drawing') {
+      } else if (isInk(note)) {
         const url = await ink.toImage({ type: 'image/png', scale: 2 });
         if (!url) return toast('Nothing to copy yet');
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': dataUrlToBlob(url) })]);
@@ -1343,8 +1705,19 @@
     const labels = {
       text: ['Download as Markdown', 'Copy as Markdown'],
       drawing: ['Download as PNG', 'Copy as image'],
+      sticky: ['Download as PNG', 'Copy as image'],
       calc: ['Download graph as PNG', 'Copy expressions'],
     }[note.type] || ['Download', 'Copy'];
+    if (note.scratch) {
+      openMenu(e.currentTarget, [
+        { icon: 'check', label: 'Save to notes', run: saveScratch },
+        { icon: 'download', label: labels[0], run: exportCurrent },
+        { icon: 'copy', label: labels[1], run: copyCurrent },
+        '-',
+        { icon: 'clear-canvas', label: 'Clear quick calc', danger: true, run: clearScratch },
+      ]);
+      return;
+    }
     openMenu(e.currentTarget, [
       { icon: 'download', label: labels[0], run: exportCurrent },
       { icon: 'copy', label: labels[1], run: copyCurrent },
@@ -1394,7 +1767,7 @@
       if (!Array.isArray(incoming)) throw new Error('No notes found in file');
       let count = 0;
       for (const raw of incoming) {
-        if (!raw || typeof raw.id !== 'string' || !['text', 'drawing', 'calc'].includes(raw.type)) continue;
+        if (!raw || typeof raw.id !== 'string' || !['text', 'drawing', 'sticky', 'calc'].includes(raw.type)) continue;
         const existing = state.notes.get(raw.id);
         if (existing && existing.updated >= (raw.updated || 0)) continue;
         const note = Store.createNote({ ...raw, html: raw.type === 'text' ? sanitizeHtml(raw.html) : '', lastEditor: INSTANCE });
@@ -1415,14 +1788,29 @@
       !IS_TAB && { icon: 'pen', label: 'Draw on current page', run: annotatePage },
       !IS_TAB && { icon: 'maximize', label: 'Open in a full tab', run: () => chrome.tabs.create({ url: chrome.runtime.getURL('app.html?tab=1') }) },
       !IS_TAB && '-',
+      { icon: 'palette', label: 'Appearance…', run: openAppearance },
+      '-',
       { icon: 'download', label: 'Back up all notes (.json)', run: exportAll },
       { icon: 'upload', label: 'Restore from backup…', run: () => $('#importInput').click() },
     ]);
   });
 
-  $('#newTextBtn').addEventListener('click', () => createNote('text'));
-  $('#newDrawBtn').addEventListener('click', () => createNote('drawing'));
-  $('#newCalcBtn').addEventListener('click', () => createNote('calc'));
+  $('#newBtn').addEventListener('click', (e) => {
+    openMenu(
+      e.currentTarget,
+      [
+        { icon: 'note', label: 'Note', hint: 'Ctrl+Alt+N', run: () => createNote('text') },
+        { icon: 'brush', label: 'Drawing', hint: 'Ctrl+Alt+D', run: () => createNote('drawing') },
+        { icon: 'sticky', label: 'Sticky', hint: 'fixed-size sketch', run: () => createNote('sticky') },
+        { icon: 'function', label: 'Calculator', hint: 'graphs & math', run: () => createNote('calc') },
+        '-',
+        { icon: 'calculator', label: 'Quick calc', hint: 'not saved', run: () => openQuickCalc() },
+        '-',
+        { icon: 'sparkle', label: 'More coming soon 🙂', disabled: true, run: () => {} },
+      ],
+      { align: 'left' }
+    );
+  });
   for (const b of $$('[data-new]')) b.addEventListener('click', () => createNote(b.dataset.new));
   els.pinBtn.addEventListener('click', togglePin);
   $('#deleteNoteBtn').addEventListener('click', deleteCurrent);
@@ -1432,6 +1820,43 @@
     await discardIfBlank(id);
     showEmpty();
   });
+
+  // ---------- appearance ----------
+
+  function renderAppearance() {
+    for (const b of $$('#themeSeg button')) b.classList.toggle('on', b.dataset.theme === (state.settings.theme || 'system'));
+    const grid = $('#paletteGrid');
+    grid.textContent = '';
+    const current = state.settings.palette || InkPalettes.DEFAULT;
+    for (const [id, p] of Object.entries(InkPalettes.PALETTES)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'palette-opt' + (id === current ? ' on' : '');
+      const light = InkPalettes.vars(id, false);
+      const dark = InkPalettes.vars(id, true);
+      b.innerHTML = `<span class="pal-swatch"><i style="background:${dark.bg}"></i><i style="background:${dark.accent}"></i><i style="background:${light.surface}"></i><i style="background:${light.accent}"></i></span>`;
+      b.append(p.name + (id === InkPalettes.DEFAULT ? ' (default)' : ''));
+      b.addEventListener('click', async () => {
+        state.settings = await Store.setSettings({ palette: id });
+        applyTheme();
+        renderAppearance();
+      });
+      grid.appendChild(b);
+    }
+  }
+
+  function openAppearance() {
+    renderAppearance();
+    $('#appearanceDialog').showModal();
+  }
+
+  for (const b of $$('#themeSeg button')) {
+    b.addEventListener('click', async () => {
+      state.settings = await Store.setSettings({ theme: b.dataset.theme });
+      applyTheme();
+      renderAppearance();
+    });
+  }
 
   // ---------- cross-view sync ----------
 

@@ -2,7 +2,7 @@
 // on-page annotation injection and screenshot capture.
 importScripts('lib/store.js');
 
-const ANNOTATOR_FILES = ['lib/icons.js', 'lib/ink-canvas.js', 'content/annotate.js'];
+const ANNOTATOR_FILES = ['lib/icons.js', 'lib/palettes.js', 'lib/ink-canvas.js', 'content/annotate.js'];
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
@@ -205,7 +205,8 @@ async function createWelcomeNote() {
     '<p>Your notes and sketches live right in Chrome’s side panel, next to whatever you are reading.</p>',
     '<ul class="checklist">',
     '<li class="checked">Install Inkwell</li>',
-    '<li>Create a note with <b>Note</b> or a sketch with <b>Drawing</b></li>',
+    '<li>Press <b>New</b> to make a note, drawing, sticky or calculator</li>',
+    '<li>Try <b>Quick calc</b> (calculator icon at the top) for math you don’t need to keep</li>',
     '<li>Highlight text on any page, right-click → <b>Save selection to Inkwell</b></li>',
     '<li>Press <b>Alt+Shift+D</b> (or right-click → <b>Draw on this page</b>) to draw on top of a website</li>',
     '</ul>',
