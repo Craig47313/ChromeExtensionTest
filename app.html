@@ -9,9 +9,11 @@
 </head>
 <body>
   <div id="app" class="app">
-    <aside class="sidebar">
+    <div class="side-scrim" id="sideScrim" hidden></div>
+    <aside class="sidebar" id="sidebar">
       <header class="side-head">
-        <div class="brand"><img src="icons/icon-32.png" alt="" width="22" height="22"><span>Inkwell</span></div>
+        <div class="brand">
+          <button class="icon-btn side-close" id="sidebarClose" data-icon="panel-left-close" title="Hide notes (Ctrl+\)" aria-label="Hide notes list"></button><img src="icons/icon-32.png" alt="" width="22" height="22"><span>Inkwell</span></div>
         <div class="head-actions">
           <button class="icon-btn" id="quickCalcBtn" data-icon="calculator" title="Quick calc (not saved)"></button>
           <button class="icon-btn" id="themeBtn" title="Theme"></button>
@@ -34,10 +36,11 @@
     </aside>
 
     <main class="main">
+      <button class="icon-btn sidebar-toggle empty-toggle" data-sidebar-toggle data-icon="panel-left" title="Show notes (Ctrl+\)" aria-label="Show notes list"></button>
       <div id="emptyState" class="empty-state">
         <img src="icons/icon-128.png" alt="" width="72" height="72">
         <h2>Capture anything</h2>
-        <p>Pick a note on the left, or start something new.</p>
+        <p>Open your notes with the <span class="inline-icon" data-icon="panel-left" data-size="14"></span> button, or start something new.</p>
         <div class="empty-actions">
           <button class="btn primary" data-new="text" data-icon="note-plus">Note</button>
           <button class="btn" data-new="drawing" data-icon="brush">Drawing</button>
@@ -48,7 +51,7 @@
 
       <section id="editor" class="editor" hidden>
         <header class="editor-head">
-          <button class="icon-btn back-btn" id="backBtn" data-icon="back" title="All notes"></button>
+          <button class="icon-btn sidebar-toggle" data-sidebar-toggle data-icon="panel-left" title="Show notes (Ctrl+\)" aria-label="Show notes list"></button>
           <input id="titleInput" class="title-input" placeholder="Untitled" maxlength="200" aria-label="Title">
           <span id="saveStatus" class="save-status" aria-live="polite"></span>
           <button class="btn primary save-scratch" id="saveScratchBtn" data-icon="check" title="Save this calculation to your notes">Save</button>

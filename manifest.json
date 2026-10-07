@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Inkwell — Notes & Drawing",
   "short_name": "Inkwell",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Rich notes, sketches and page annotations in Chrome's side panel. Clip text from any site and draw right on top of web pages.",
   "minimum_chrome_version": "116",
   "icons": {

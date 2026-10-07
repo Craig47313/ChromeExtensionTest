@@ -570,7 +570,7 @@
   async function openNote(id, { focus = false } = {}) {
     const prev = state.currentId;
     if (id === prev && !els.editor.hidden) {
-      els.app.classList.add('show-editor');
+      if (isNarrow()) setSidebar(false);
       return;
     }
     await saveNow();
@@ -579,7 +579,7 @@
     if (prev && prev !== id) await discardIfBlank(prev);
 
     state.currentId = id;
-    els.app.classList.add('show-editor');
+    if (isNarrow()) setSidebar(false); // the list was covering the editor
     els.emptyState.hidden = true;
     els.editor.hidden = false;
     loadEditor(note);
@@ -680,7 +680,6 @@
     state.currentId = null;
     els.editor.hidden = true;
     els.emptyState.hidden = false;
-    els.app.classList.remove('show-editor');
     renderList();
   }
 
@@ -1638,7 +1637,7 @@
     if (isEditableTarget(e.target)) return;
     if (e.key === '/' && !mod) {
       e.preventDefault();
-      els.app.classList.remove('show-editor');
+      setSidebar(true);
       els.search.focus();
       return;
     }
@@ -1814,11 +1813,37 @@
   for (const b of $$('[data-new]')) b.addEventListener('click', () => createNote(b.dataset.new));
   els.pinBtn.addEventListener('click', togglePin);
   $('#deleteNoteBtn').addEventListener('click', deleteCurrent);
-  $('#backBtn').addEventListener('click', async () => {
-    const id = state.currentId;
-    await saveNow();
-    await discardIfBlank(id);
-    showEmpty();
+  // ---------- sidebar (notes list) toggle ----------
+
+  const narrowQuery = matchMedia('(max-width: 720px)');
+  const isNarrow = () => narrowQuery.matches;
+
+  // On a wide panel the choice is remembered; on a narrow one the list is an
+  // overlay that closes again once you pick something.
+  function setSidebar(open, { persist = !isNarrow() } = {}) {
+    els.app.classList.toggle('sidebar-open', open);
+    $('#sideScrim').hidden = !open;
+    if (persist && state.settings.sidebar !== (open ? 'open' : 'closed')) {
+      state.settings.sidebar = open ? 'open' : 'closed';
+      Store.setSettings({ sidebar: state.settings.sidebar });
+    }
+  }
+
+  const sidebarOpen = () => els.app.classList.contains('sidebar-open');
+  for (const b of $$('[data-sidebar-toggle]')) b.addEventListener('click', () => setSidebar(true));
+  $('#sidebarClose').addEventListener('click', () => setSidebar(false));
+  $('#sideScrim').addEventListener('click', () => setSidebar(false));
+  narrowQuery.addEventListener('change', () => {
+    // Crossing the breakpoint: wide restores the saved choice, narrow starts closed.
+    setSidebar(isNarrow() ? false : state.settings.sidebar === 'open', { persist: false });
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+      e.preventDefault();
+      setSidebar(!sidebarOpen());
+    } else if (e.key === 'Escape' && isNarrow() && sidebarOpen() && !openMenuEl && !document.querySelector('dialog[open]')) {
+      setSidebar(false);
+    }
   });
 
   // ---------- appearance ----------
@@ -2102,9 +2127,11 @@
     const notes = await Store.all();
     for (const n of notes) state.notes.set(n.id, n);
     renderList();
+    setSidebar(!isNarrow() && state.settings.sidebar === 'open', { persist: false });
     const { openRequest } = await chrome.storage.local.get('openRequest');
     if (openRequest) await handleOpenRequest(openRequest);
-    else if (IS_TAB || window.innerWidth > 720) {
+    else {
+      // Start on your most recent note rather than an empty screen.
       const first = sortedNotes()[0];
       if (first) openNote(first.id);
     }

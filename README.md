@@ -61,6 +61,7 @@ Inkwell is a Manifest V3 Chrome extension for writing notes and sketching. It ru
 - **Save link to Inkwell** and **Save this page to Inkwell** save links
 
 **Organizing**
+- The notes list opens and closes with a toggle button (or Ctrl+\\), and remembers your choice. In a narrow side panel it slides over the editor.
 - Instant search, pinned notes, duplicate, and a delete button on every note (with undo)
 - Light, dark and system themes, plus color palettes (⋯ → Appearance). The default palette, **Monitry**, matches the Monitry product suite; Indigo, Ocean, Rose, Amber and Graphite are also available.
 - Full backup and restore as JSON
