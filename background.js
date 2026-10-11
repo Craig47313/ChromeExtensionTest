@@ -1,6 +1,6 @@
 // Inkwell service worker: side panel wiring, context menus, keyboard commands,
 // on-page annotation injection and screenshot capture.
-importScripts('lib/store.js');
+importScripts('lib/store.js', 'lib/planner.js', 'lib/onitry.js', 'planner-bg.js');
 
 const ANNOTATOR_FILES = ['lib/icons.js', 'lib/palettes.js', 'lib/ink-canvas.js', 'content/annotate.js'];
 
@@ -59,6 +59,7 @@ function hostOf(url) {
 
 async function updateBadge(tabId, url) {
   if (tabId === undefined) return;
+  if (globalThis.PlanBg && PlanBg.focusActive) return; // the focus timer owns the badge
   let text = '';
   if (url && /^https?:/i.test(url)) {
     const data = await chrome.storage.local.get(null);

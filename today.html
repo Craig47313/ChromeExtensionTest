@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Today</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="today.css">
+</head>
+<body class="today-body">
+  <div class="t-app">
+    <header class="t-head">
+      <div class="t-clock">
+        <div class="t-date" id="dateLine"></div>
+        <div class="t-time" id="timeLine"></div>
+      </div>
+      <div class="t-head-actions">
+        <button class="onitry-chip" id="onitryChip" title="Onitry connection"></button>
+        <button class="icon-btn" id="notesBtn" data-icon="note" title="Notes"></button>
+        <button class="icon-btn" id="settingsBtn" data-icon="wrench" title="Planner settings"></button>
+      </div>
+    </header>
+
+    <section class="now-card" id="nowCard" aria-live="polite"></section>
+
+    <section class="add-card">
+      <span class="add-icon" data-icon="plus"></span>
+      <textarea id="quickAdd" rows="1" spellcheck="false" placeholder="Add anything… “calc hw due thu 40m”, “econ test fri”, “~ cad the claw”"></textarea>
+      <div class="add-preview" id="quickPreview"></div>
+    </section>
+
+    <nav class="t-tabs" id="tabs" role="tablist">
+      <button data-tab="today" class="on">Today</button>
+      <button data-tab="week">Week</button>
+      <button data-tab="someday">Free time</button>
+      <button data-tab="journal">Journal</button>
+    </nav>
+
+    <main class="t-grid">
+      <section class="t-col card" data-col="today">
+        <div class="col-head">
+          <h2>Today</h2>
+          <span class="col-meta" id="todayMeta"></span>
+        </div>
+        <div class="heads-up" id="headsUp"></div>
+        <ol class="task-list" id="todayList"></ol>
+        <div class="list-foot" id="todayFoot"></div>
+        <details class="done-today" id="doneToday">
+          <summary></summary>
+          <ol class="task-list" id="doneList"></ol>
+        </details>
+      </section>
+
+      <section class="t-col card" data-col="week">
+        <div class="col-head">
+          <h2 id="weekTitle">Next 7 days</h2>
+          <div class="week-nav">
+            <button class="icon-btn" id="weekPrev" data-icon="back" data-size="16" title="Previous week"></button>
+            <button class="chip" id="weekNow">Now</button>
+            <button class="icon-btn flip" id="weekNext" data-icon="back" data-size="16" title="Next week"></button>
+          </div>
+        </div>
+        <div class="week-grid" id="weekGrid"></div>
+        <div class="col-head sub">
+          <h3>Coming up</h3>
+        </div>
+        <ol class="up-list" id="upList"></ol>
+      </section>
+
+      <section class="t-col card" data-col="someday">
+        <div class="col-head">
+          <h2>When there’s “nothing” to do</h2>
+        </div>
+        <p class="col-help">Free block? Homework done? Pick one of these instead of YouTube.</p>
+        <ol class="task-list" id="somedayList"></ol>
+        <input class="mini-add" id="somedayAdd" placeholder="+ Add a project or idea" spellcheck="false">
+      </section>
+
+      <section class="t-col card" data-col="journal">
+        <div class="col-head">
+          <h2>Journal</h2>
+          <span class="col-meta" id="streak"></span>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="eod" id="eodCard"></div>
+        <textarea class="log-input" id="logInput" rows="2" placeholder="What’s going on? Enter to log it with the time."></textarea>
+        <ol class="journal-list" id="journalList"></ol>
+        <div class="history" id="history"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="taskDialog" class="t-dialog">
+    <form method="dialog" id="taskForm">
+      <h3>Edit task</h3>
+      <label>Title<input name="title" required maxlength="200"></label>
+      <div class="row2">
+        <label>Subject<select name="course"></select></label>
+        <label>Type
+          <select name="kind">
+            <option value="todo">To-do</option>
+            <option value="due">Due (homework)</option>
+            <option value="test">Test / quiz</option>
+          </select>
+        </label>
+      </div>
+      <div class="row2">
+        <label>Due<input type="date" name="due"></label>
+        <label>Estimate (min)<input type="number" name="estimate" min="0" max="600" step="5"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="today"> On today’s list</label>
+      <label class="check"><input type="checkbox" name="someday"> “Nothing to do” list (projects &amp; ideas)</label>
+      <div class="dialog-actions spread">
+        <button class="btn danger" value="delete" type="submit" data-icon="trash">Delete</button>
+        <span>
+          <button class="btn" value="cancel" formnovalidate>Cancel</button>
+          <button class="btn primary" value="save">Save</button>
+        </span>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="t-dialog wide">
+    <form method="dialog" id="settingsForm">
+      <h3>Planner settings</h3>
+
+      <div class="set-sec">Distraction gate</div>
+      <label>When should distracting sites be gated?
+        <select name="guardMode">
+          <option value="smart">Smart: during focus blocks, and in work hours when something is due by tomorrow</option>
+          <option value="focus">Only during focus blocks</option>
+          <option value="always">Always</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <label>Gated sites (one per line)<textarea name="sites" rows="4" spellcheck="false"></textarea></label>
+      <label>Default pass length (minutes)<input type="number" name="passMinutes" min="1" max="60"></label>
+
+      <div class="set-sec">Work hours &amp; nudges</div>
+      <div class="row2">
+        <label>Weekdays from<input type="time" name="workStart"></label>
+        <label>until<input type="time" name="workEnd"></label>
+      </div>
+      <div class="row2">
+        <label>Weekends from<input type="time" name="weekendStart"></label>
+        <label>until<input type="time" name="weekendEnd"></label>
+      </div>
+      <div class="row2">
+        <label>Check-in when idle every (min, 0 = off)<input type="number" name="checkinMinutes" min="0" max="240"></label>
+        <label>Default focus block (min)<input type="number" name="focusMinutes" min="5" max="240" step="5"></label>
+      </div>
+      <div class="row2">
+        <label>“Plan your afternoon” reminder<input type="time" name="planTime"></label>
+        <label>End-of-day check-in<input type="time" name="eodTime"></label>
+      </div>
+
+      <div class="set-sec">Onitry</div>
+      <p class="set-help">Open Onitry → ⚙ Configure and copy the <b>browser planner pairing code</b>. Starting a focus block here will then start Onitry monitoring on that task.</p>
+      <label class="check"><input type="checkbox" name="onitryEnabled"> Connect to Onitry</label>
+      <div class="row2">
+        <label>Pairing code<input name="onitryCode" placeholder="ABCD-EFGH" spellcheck="false" autocomplete="off"></label>
+        <label>&nbsp;<button type="button" class="btn" id="onitryTest">Test connection</button></label>
+      </div>
+      <div class="onitry-result" id="onitryResult"></div>
+      <label class="check"><input type="checkbox" name="onitryAutoStart"> Start Onitry monitoring when a focus block starts</label>
+      <label class="check"><input type="checkbox" name="onitryAutoStop"> Stop Onitry when the focus block ends</label>
+
+      <div class="set-sec">Subjects</div>
+      <label>One per line: <code>Name: alias, alias</code><textarea name="courses" rows="6" spellcheck="false"></textarea></label>
+
+      <div class="dialog-actions">
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="lib/icons.js"></script>
+  <script src="lib/palettes.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="lib/planner.js"></script>
+  <script src="lib/onitry.js"></script>
+  <script src="today.js"></script>
+</body>
+</html>

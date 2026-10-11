@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hold up</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="guard.css">
+</head>
+<body class="guard-body">
+  <main class="g-card">
+    <div class="g-site" id="site"></div>
+    <h1 id="headline">Hold up.</h1>
+    <p class="g-why" id="why"></p>
+
+    <section class="g-box" id="focusBox" hidden>
+      <div class="g-label">You’re in a focus block</div>
+      <div class="g-focus-title" id="focusTitle"></div>
+      <div class="g-focus-left" id="focusLeft"></div>
+    </section>
+
+    <section class="g-box" id="dueBox" hidden>
+      <div class="g-label">Still to do</div>
+      <ol class="g-list" id="dueList"></ol>
+    </section>
+
+    <section class="g-box idea" id="ideaBox" hidden>
+      <div class="g-label">Nothing due? Try this instead</div>
+      <div id="idea"></div>
+    </section>
+
+    <div class="g-actions">
+      <button class="btn primary big" id="backBtn">Back to work</button>
+      <button class="btn big" id="focusBtn" hidden>Start a focus block</button>
+    </div>
+
+    <details class="g-pass" id="passBox">
+      <summary id="passSummary">I really need this site</summary>
+      <div class="g-pass-body">
+        <label for="reason">Why? Be specific — this goes in your journal.</label>
+        <textarea id="reason" rows="2" placeholder="e.g. watching the Khan Academy video on Gibbs free energy for chem"></textarea>
+        <div id="sentenceWrap" hidden>
+          <label for="sentence">You’re in a focus block. Type this exactly:</label>
+          <div class="g-sentence" id="sentenceText"></div>
+          <textarea id="sentence" rows="2" spellcheck="false" autocomplete="off"></textarea>
+        </div>
+        <div class="g-mins" id="mins"></div>
+        <button class="btn danger" id="passBtn" disabled>Let me in</button>
+        <div class="g-count" id="count"></div>
+      </div>
+    </details>
+    <div class="g-today" id="todayStats"></div>
+  </main>
+
+  <script src="lib/icons.js"></script>
+  <script src="lib/palettes.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="lib/planner.js"></script>
+  <script src="guard.js"></script>
+</body>
+</html>

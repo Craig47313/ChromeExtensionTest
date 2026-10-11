@@ -2118,7 +2118,25 @@
 
   // ---------- boot ----------
 
+  $('#todayBtn').addEventListener('click', async () => {
+    if (IS_TAB) {
+      location.href = 'today.html';
+      return;
+    }
+    await saveNow();
+    await chrome.storage.local.set({ 'ui:view': 'today' });
+    location.href = 'today.html?view=panel';
+  });
+
   async function init() {
+    // The side panel opens on whichever view you used last (Today by default).
+    if (!IS_TAB) {
+      const { 'ui:view': view } = await chrome.storage.local.get('ui:view');
+      if (view !== 'notes') {
+        location.replace('today.html?view=panel');
+        return;
+      }
+    }
     hydrateIcons();
     document.documentElement.classList.toggle('is-tab', IS_TAB);
     state.settings = await Store.getSettings();
