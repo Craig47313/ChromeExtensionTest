@@ -1,8 +1,8 @@
 From 5fe76bdac8354308ea80b20f79a73dc9cb7f111e Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Sun, 11 Oct 2026 14:22:57 +0000
-Subject: [PATCH] Add a local browser bridge so the Today planner extension can
- drive Onitry
+Subject: [PATCH 1/2] Add a local browser bridge so the Today planner extension
+ can drive Onitry
 
 core/bridge.py: stdlib-only HTTP bridge on 127.0.0.1:47323. Requires a
 pairing code (X-Onitry-Token), answers CORS preflights only for

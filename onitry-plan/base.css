@@ -1,0 +1,101 @@
+/* Onitry Plan base styles: theme tokens, buttons, chips, dialogs, toast. */
+:root {
+  --bg: #f5f5f8;
+  --surface: #ffffff;
+  --surface-2: #f0f0f4;
+  --border: #e3e3ea;
+  --text: #1d1d23;
+  --muted: #6d6d7a;
+  --accent: #5b5bd6;
+  --accent-soft: rgba(91, 91, 214, 0.12);
+  --accent-contrast: #ffffff;
+  --danger: #d9363e;
+  --paper: #ffffff;
+  --grid: rgba(20, 20, 40, 0.1);
+  --shadow: 0 10px 34px rgba(20, 20, 40, 0.14);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #121215;
+  --surface: #1a1a1f;
+  --surface-2: #24242b;
+  --border: #2e2e37;
+  --text: #ececf1;
+  --muted: #9a9aa8;
+  --accent: #8d8cf7;
+  --accent-soft: rgba(141, 140, 247, 0.16);
+  --accent-contrast: #121215;
+  --danger: #ff6b6b;
+  --paper: #1a1a1f;
+  --grid: rgba(255, 255, 255, 0.09);
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+svg { display: block; flex-shrink: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.icon-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn.on { color: var(--accent); }
+.icon-btn.danger:hover { color: var(--danger); }
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 34px; padding: 0 14px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); cursor: pointer; font-weight: 600; white-space: nowrap;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn svg { width: 16px; height: 16px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px; z-index: 50; transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); padding: 10px 14px;
+  background: #1d1d23; color: #fff; border-radius: 10px; box-shadow: var(--shadow); font-size: 13px;
+  transition: opacity 0.18s, transform 0.18s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast button { padding: 0; border: 0; background: none; color: #a9a8ff; font-weight: 700; cursor: pointer; white-space: nowrap; }
+:root[data-theme="dark"] .toast { background: #ececf1; color: #121215; }
+:root[data-theme="dark"] .toast button { color: #4b4ac4; }
+
+dialog {
+  width: min(380px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+}
+dialog::backdrop { background: rgba(10, 10, 20, 0.35); }
+dialog label { display: block; margin-bottom: 8px; font-weight: 600; }
+dialog input {
+  width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); outline: none;
+}
+dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.chip {
+  height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  font-size: 12px; font-weight: 650; cursor: pointer; color: var(--text);
+}
+.chip:hover { border-color: var(--accent); }
+.chip.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }

@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Inkwell — Notes & Drawing",
   "short_name": "Inkwell",
-  "version": "1.4.0",
-  "description": "Plan your day, focus, and take notes and sketches in Chrome. A Today planner with focus blocks, a distraction gate and Onitry integration, plus rich notes, drawings and a graphing calculator.",
+  "version": "1.5.0",
+  "description": "Rich notes, sketches, a graphing calculator and page annotations in Chrome's side panel. Clip text from any site and draw right on top of web pages.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
@@ -30,26 +30,10 @@
     "sidePanel",
     "contextMenus",
     "activeTab",
-    "scripting",
-    "alarms",
-    "notifications",
-    "declarativeNetRequest",
-    "idle"
+    "scripting"
   ],
   "optional_permissions": [
     "tabs"
-  ],
-  "host_permissions": [
-    "http://127.0.0.1/*",
-    "*://*.youtube.com/*",
-    "*://*.reddit.com/*",
-    "*://*.instagram.com/*",
-    "*://*.tiktok.com/*",
-    "*://*.x.com/*",
-    "*://*.twitter.com/*",
-    "*://*.netflix.com/*",
-    "*://*.twitch.tv/*",
-    "*://*.facebook.com/*"
   ],
   "optional_host_permissions": [
     "<all_urls>"
@@ -67,18 +51,5 @@
       },
       "description": "Draw on the current page"
     }
-  },
-  "chrome_url_overrides": {
-    "newtab": "today.html"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "guard.html"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ]
+  }
 }

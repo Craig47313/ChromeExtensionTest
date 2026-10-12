@@ -1,6 +1,7 @@
-// Planner side of the service worker: focus blocks, the distraction gate
+// Onitry Plan's service worker logic: focus blocks, the distraction gate
 // (declarativeNetRequest redirect to guard.html), nudges, notifications, the
-// toolbar badge, and syncing with the Onitry desktop app.
+// toolbar badge, where the planner opens, and syncing with the Onitry desktop
+// app (status, off-task escalation, launching it, the weekly AI review).
 // Loaded from background.js via importScripts (after lib/planner.js + lib/onitry.js).
 (() => {
   'use strict';
@@ -11,6 +12,8 @@
   const TICK = 'plan-tick';
   const FOCUS_END = 'plan-focus-end';
   const PASS_EXPIRE = 'plan-pass-expire';
+  const ONITRY_POLL = 'plan-onitry'; // every 30s during a watched focus block
+  const ESCALATE_MINUTES = 10;
   const TODAY_URL = () => chrome.runtime.getURL('today.html');
   let lastGuardKey = null;
   let lastOnitryStatus = null;
@@ -26,6 +29,8 @@
     const focus = await P.store.get(K.focus, null);
     PlanBg.focusActive = !!focus;
     if (focus) chrome.alarms.create(FOCUS_END, { when: Math.max(Date.now() + 1000, focus.endsAt) });
+    await applyPlacement();
+    await updateOnitryPoll();
     await syncGuard(true);
     await updateFocusBadge();
   }
@@ -35,7 +40,46 @@
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes[K.tasks] || changes[K.focus] || changes[K.settings] || changes[K.passes]) syncGuard();
+    if (changes[K.tasks] || changes[K.focus] || changes[K.settings] || changes[K.passes] || changes[K.meta]) syncGuard();
+    if (changes[K.settings]) {
+      const before = (changes[K.settings].oldValue || {}).placement;
+      const after = (changes[K.settings].newValue || {}).placement;
+      if (before !== after) applyPlacement();
+    }
+    if (changes[K.focus] || changes[K.settings]) updateOnitryPoll();
+  });
+
+  // ---------- where the planner lives: side panel, its own tab, or every new tab ----------
+
+  async function applyPlacement() {
+    const { placement } = await P.getSettings();
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: placement === 'panel' }).catch(() => {});
+  }
+
+  // Focus the planner tab if one is open, otherwise open one (pinned in "tab" mode).
+  async function openPlannerTab(hash = '') {
+    const { placement } = await P.getSettings();
+    const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'] }).catch(() => []);
+    const open = contexts.find((c) => c.tabId >= 0 && c.documentUrl && c.documentUrl.startsWith(TODAY_URL()) && !c.documentUrl.includes('view=panel'));
+    if (open) {
+      await chrome.tabs.update(open.tabId, { active: true, ...(hash ? { url: TODAY_URL() + hash } : {}) }).catch(() => {});
+      if (open.windowId >= 0) await chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
+      return;
+    }
+    await chrome.tabs.create({ url: TODAY_URL() + hash, pinned: placement === 'tab', index: placement === 'tab' ? 0 : undefined });
+  }
+
+  // Only fires when the side panel isn't set to open on click.
+  chrome.action.onClicked.addListener(() => openPlannerTab());
+
+  // "Every new tab": swap Chrome's new tab page for the planner. Needs the optional
+  // "tabs" permission to see the new tab's URL (requested when you pick this mode).
+  const NEW_TAB_URLS = ['chrome://newtab/', 'chrome://new-tab-page/', 'edge://newtab/', 'brave://newtab/'];
+  chrome.tabs.onCreated.addListener(async (tab) => {
+    const url = tab.pendingUrl || tab.url || '';
+    if (!NEW_TAB_URLS.includes(url)) return;
+    const { placement } = await P.getSettings();
+    if (placement === 'newtab') chrome.tabs.update(tab.id, { url: TODAY_URL() }).catch(() => {});
   });
 
   // ---------- focus blocks ----------
@@ -66,21 +110,36 @@
       endsAt: now + minutes * 60000,
       minutes,
       onitry: false,
+      onitryPending: settings.onitry.enabled && settings.onitry.autoStart,
       onitryError: null,
     };
-    if (settings.onitry.enabled && settings.onitry.autoStart) {
-      const res = await OnitryBridge.startTask(settings.onitry, focus.title, await taskDetails(taskId, focus.title));
-      focus.onitry = !!res.ok;
-      focus.onitryError = res.ok ? null : res.error;
-    }
     await P.store.set(K.focus, focus);
     PlanBg.focusActive = true;
     chrome.alarms.create(FOCUS_END, { when: focus.endsAt });
-    await P.log(`Started ${P.fmtMinutes(minutes)} focus: ${focus.title}${focus.onitry ? ' (Onitry watching)' : ''}`, 'focus');
+    await P.log(`Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus');
     if (taskId) await P.updateTask(taskId, { plan: P.dateKey() });
     await syncGuard(true);
     await updateFocusBadge();
-    return { ok: true, focus, onitryError: focus.onitryError };
+    // Hooking up Onitry can take a while if it has to be launched first, so it
+    // happens after the block has started and updates the stored focus when done.
+    if (focus.onitryPending) connectOnitry(focus.id, settings);
+    return { ok: true, focus };
+  }
+
+  async function connectOnitry(focusId, settings) {
+    const details = await taskDetails((await P.store.get(K.focus, {})).taskId, 'focus');
+    const current = await P.store.get(K.focus, null);
+    if (!current || current.id !== focusId) return;
+    let res = await OnitryBridge.startTask(settings.onitry, current.title, details);
+    if (!res.ok && !res.reachable && settings.onitry.launch) {
+      const up = await OnitryBridge.ensureRunning(settings.onitry);
+      res = up.ok ? await OnitryBridge.startTask(settings.onitry, current.title, details) : { ok: false, error: up.error };
+      if (up.ok && up.launched) await P.log('Launched Onitry', 'system');
+    }
+    const latest = await P.store.get(K.focus, null);
+    if (!latest || latest.id !== focusId) return; // block ended while we were connecting
+    await P.store.set(K.focus, { ...latest, onitry: !!res.ok, onitryPending: false, onitryError: res.ok ? null : res.error });
+    if (res.ok) await P.log(`Onitry is watching: ${latest.title}`, 'focus');
   }
 
   async function focusStop(outcome = 'stopped', { quiet = false } = {}) {
@@ -102,6 +161,7 @@
     await P.store.update(K.sessions, [], (all) => all.concat([session]).slice(-3000));
     if (outcome === 'done' && focus.taskId) await P.updateTask(focus.taskId, { done: now });
     await P.store.set(K.focus, null);
+    await P.store.update(K.meta, {}, (m) => ({ ...m, escalatedUntil: 0 }));
     PlanBg.focusActive = false;
     chrome.alarms.clear(FOCUS_END);
     chrome.notifications.clear('focus-end');
@@ -132,7 +192,7 @@
     const focus = await P.store.get(K.focus, null);
     if (!focus) {
       await chrome.action.setBadgeText({ text: '' }).catch(() => {});
-      await chrome.action.setTitle({ title: 'Open Inkwell' }).catch(() => {});
+      await chrome.action.setTitle({ title: 'Onitry Plan' }).catch(() => {});
       return;
     }
     const left = Math.round((focus.endsAt - Date.now()) / 60000);
@@ -164,9 +224,9 @@
   }
 
   async function syncGuard(force = false) {
-    const [settings, focus, tasks] = await Promise.all([P.getSettings(), P.store.get(K.focus, null), P.store.get(K.tasks, [])]);
+    const [settings, focus, tasks, meta] = await Promise.all([P.getSettings(), P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.meta, {})]);
     const passes = await activePasses();
-    const gs = P.guardState(settings, focus, tasks);
+    const gs = P.guardState(settings, focus, tasks, new Date(), meta.escalatedUntil || 0);
     const sites = gs.active ? settings.sites.filter((s) => !passes[s]) : [];
     const key = JSON.stringify(sites);
 
@@ -192,7 +252,7 @@
         addRules,
       });
     } catch (err) {
-      console.error('Inkwell gate rules failed', err);
+      console.error('Onitry Plan gate rules failed', err);
       await P.store.update(K.meta, {}, (m) => ({ ...m, guardError: String(err && err.message) }));
     }
     // Sites that just became gated: send already-open tabs to the gate too.
@@ -214,6 +274,8 @@
     const settings = await P.getSettings();
     if (!settings.sites.includes(site)) return { ok: false, error: 'not a gated site' };
     const focus = await P.store.get(K.focus, null);
+    const meta = await P.store.get(K.meta, {});
+    if (focus && (meta.escalatedUntil || 0) > Date.now()) return { ok: false, error: 'Onitry caught you off task. No passes for a few minutes.' };
     const max = focus ? 5 : 60;
     const mins = Math.max(1, Math.min(max, Number(minutes) || settings.passMinutes));
     const until = Date.now() + mins * 60000;
@@ -221,6 +283,62 @@
     await P.log(`${site} for ${mins}m — “${String(reason || '').slice(0, 200)}”${focus ? ` (during focus on ${focus.title})` : ''}`, 'pass');
     await syncGuard(true);
     return { ok: true, until, url };
+  }
+
+  // ---------- Onitry: fast polling and off-task escalation ----------
+
+  async function updateOnitryPoll() {
+    const [settings, focus] = await Promise.all([P.getSettings(), P.store.get(K.focus, null)]);
+    if (settings.onitry.enabled && focus) chrome.alarms.create(ONITRY_POLL, { periodInMinutes: 0.5 });
+    else chrome.alarms.clear(ONITRY_POLL);
+  }
+
+  async function checkOnitry() {
+    const [settings, focus] = await Promise.all([P.getSettings(), P.store.get(K.focus, null)]);
+    if (!settings.onitry.enabled) return;
+    lastOnitryStatus = { ...(await OnitryBridge.status(settings.onitry)), at: Date.now() };
+    await P.store.set(K.onitry, lastOnitryStatus);
+    if (focus && settings.onitry.escalate && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task') await escalate(focus, lastOnitryStatus);
+    await updateFocusBadge();
+  }
+
+  // Onitry says you drifted during a focus block: revoke passes, gate every
+  // distracting site (even with the gate "off") and refuse passes for a while.
+  async function escalate(focus, st) {
+    const meta = await P.store.get(K.meta, {});
+    const now = Date.now();
+    const wasEscalated = (meta.escalatedUntil || 0) > now;
+    await P.store.set(K.meta, { ...meta, escalatedUntil: now + ESCALATE_MINUTES * 60000 });
+    if (wasEscalated) return; // just extend it
+    await P.store.set(K.passes, {});
+    lastGuardKey = null; // treat every site as newly gated so open tabs get sent to the gate
+    await syncGuard(true);
+    await P.log(`Onitry: off task during ${focus.title}${st.activity ? ` (${st.activity})` : ''} — gate locked ${ESCALATE_MINUTES}m`, 'nudge');
+    await notify('escalate', 'Onitry caught you off task', `Back to “${focus.title}”. Distracting sites are locked for ${ESCALATE_MINUTES} minutes.`, ['Open planner'], true);
+  }
+
+  // ---------- weekly review ----------
+
+  async function runReview(week) {
+    const start = week || P.weekStart(P.addDays(P.dateKey(), -1)); // Sunday counts as the week just ending
+    const [settings, tasks, sessions, journal, eod] = await Promise.all([
+      P.getSettings(),
+      P.store.get(K.tasks, []),
+      P.store.get(K.sessions, []),
+      P.store.get(K.journal, {}),
+      P.store.get(K.eod, {}),
+    ]);
+    const stats = P.weekStats({ tasks, sessions, journal, eod, settings }, start);
+    const entry = { week: start, stats, at: Date.now(), text: null, error: null };
+    if (!settings.onitry.enabled) entry.error = 'Connect Onitry in settings to get an AI review.';
+    else {
+      const res = await OnitryBridge.review(settings.onitry, stats);
+      if (res.ok) Object.assign(entry, { text: res.text, model: res.model });
+      else entry.error = res.reachable ? res.error : 'Onitry isn’t running. Open it and try again.';
+    }
+    await P.store.update(K.reviews, {}, (all) => ({ ...all, [start]: entry }));
+    if (entry.text) await P.log('Weekly review written by Onitry', 'system');
+    return { ok: !entry.error, ...entry };
   }
 
   // ---------- nudges ----------
@@ -265,8 +383,7 @@
 
     // Onitry status (also refreshed every few seconds by any open Today page).
     if (settings.onitry.enabled) {
-      lastOnitryStatus = { ...(await OnitryBridge.status(settings.onitry)), at: Date.now() };
-      await P.store.set(K.onitry, lastOnitryStatus);
+      await checkOnitry();
       // Started monitoring from the Onitry window while no browser focus block runs → mirror it.
       if (!focus && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.task && m.lastMirroredTask !== lastOnitryStatus.task) {
         m.lastMirroredTask = lastOnitryStatus.task;
@@ -324,21 +441,45 @@
       m.testReminded = reminded;
     }
 
-    if (changed) await P.store.set(K.meta, m);
+    // 5) Free block at school: suggest the top thing instead of scrolling.
+    const free = settings.blocks.freeNudge && !focus ? P.inFreeBlock(settings, now) : null;
+    if (free && m.freeNudged !== `${today} ${free.start}`) {
+      m.freeNudged = `${today} ${free.start}`;
+      changed = true;
+      const pick = open[0] || tasks.find((t) => t.someday && !t.done);
+      const left = P.minutesOfDay(free.end) - nowMin;
+      m.freeTaskId = pick ? pick.id : null;
+      m.freeMinutes = Math.max(10, left - 5);
+      await notify('free', `${free.label} — ${P.fmtMinutes(left)} left`, pick ? `Use it: ${pick.title}` : 'Nothing planned. Open the planner and pick something.', pick ? [`▶ Start (${P.fmtMinutes(m.freeMinutes)})`, 'Not now'] : ['Open planner']);
+    }
+
+    // 6) Weekly review, on the review day from an hour before the EOD check-in.
+    const reviewWeek = P.weekStart(P.addDays(today, -1));
+    if (now.getDay() === settings.weeklyReviewDay && nowMin >= eodMin - 60 && m.reviewPrompted !== reviewWeek) {
+      m.reviewPrompted = reviewWeek;
+      changed = true;
+      await notify('review', 'Weekly review', 'Your week in numbers is ready. Take 5 minutes to look back and plan next week.', ['Open review']);
+    }
+
+    // Merge, but never write back escalatedUntil: checkOnitry() may have just set it.
+    delete m.escalatedUntil;
+    if (changed) await P.store.update(K.meta, {}, (cur) => ({ ...cur, ...m }));
   }
 
   // Handy for debugging from the service-worker console.
-  Object.assign(PlanBg, { tick, syncGuard, focusStart, focusStop });
+  Object.assign(PlanBg, { tick, syncGuard, focusStart, focusStop, grantPass, checkOnitry, runReview, openPlannerTab });
 
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === TICK) tick();
+    else if (alarm.name === ONITRY_POLL) checkOnitry();
     else if (alarm.name === PASS_EXPIRE) {
       const before = await P.store.get(K.passes, {});
       await syncGuard(true);
       const after = await activePasses();
       const expired = Object.keys(before).filter((s) => !after[s]);
       const settings = await P.getSettings();
-      const gs = P.guardState(settings, await P.store.get(K.focus, null), await P.store.get(K.tasks, []));
+      const meta = await P.store.get(K.meta, {});
+      const gs = P.guardState(settings, await P.store.get(K.focus, null), await P.store.get(K.tasks, []), new Date(), meta.escalatedUntil || 0);
       if (expired.length && gs.active) await gateOpenTabs(expired);
     } else if (alarm.name === FOCUS_END) {
       const focus = await P.store.get(K.focus, null);
@@ -350,13 +491,12 @@
 
   // ---------- notification actions ----------
 
-  async function openToday(hash = '') {
-    await chrome.tabs.create({ url: TODAY_URL() + hash });
-  }
+  const openToday = (hash = '') => openPlannerTab(hash);
+  const HASH_FOR = { eod: '#eod', review: '#review' };
 
   chrome.notifications.onClicked.addListener((id) => {
     chrome.notifications.clear(id);
-    openToday(id === 'eod' ? '#eod' : '');
+    openToday(HASH_FOR[id] || '');
   });
 
   chrome.notifications.onButtonClicked.addListener(async (id, index) => {
@@ -372,8 +512,16 @@
       if (index === 0 && t) await focusStart({ taskId: t.id, title: t.title, course: t.course, minutes: t.estimate || settings.focusMinutes });
       else if (index === 0) await openToday();
       else await P.store.set(K.meta, { ...meta, lastNudge: Date.now() }); // snooze = reset the timer
-    } else if (id === 'plan') await openToday();
+    } else if (id === 'plan' || id === 'escalate') await openToday();
     else if (id === 'eod') await openToday('#eod');
+    else if (id === 'review') await openToday('#review');
+    else if (id === 'free') {
+      const meta = await P.store.get(K.meta, {});
+      const tasks = await P.store.get(K.tasks, []);
+      const t = tasks.find((x) => x.id === meta.freeTaskId);
+      if (index === 0 && t) await focusStart({ taskId: t.id, title: t.title, course: t.course, minutes: meta.freeMinutes || settings.focusMinutes });
+      else if (index === 0) await openToday();
+    }
     else if (id.startsWith('test-')) {
       const tasks = await P.store.get(K.tasks, []);
       const t = tasks.find((x) => `test-${x.id}` === id);
@@ -392,6 +540,9 @@
       else if (msg.action === 'extend') job = focusExtend(msg.minutes);
     } else if (msg.type === 'plan:pass') job = grantPass(msg);
     else if (msg.type === 'plan:guard-state') job = syncGuard(true);
+    else if (msg.type === 'plan:review') job = runReview(msg.week);
+    else if (msg.type === 'plan:launch') job = P.getSettings().then((s) => OnitryBridge.ensureRunning(s.onitry));
+    else if (msg.type === 'plan:open-tab') job = openPlannerTab(msg.hash || '').then(() => ({ ok: true }));
     if (!job) return false;
     job.then(sendResponse, (err) => sendResponse({ ok: false, error: err.message }));
     return true;

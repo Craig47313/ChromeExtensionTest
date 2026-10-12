@@ -1,57 +1,11 @@
-# Inkwell: plan, focus, notes and drawing for Chrome
+# Inkwell: notes and drawing for Chrome
 
-Inkwell is a Manifest V3 Chrome extension. It has two halves:
+Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a Desmos-style graphing calculator. It runs in Chrome's side panel, next to the page you're reading, and it can also open in a full tab. You can clip text from websites and draw directly on top of any page.
 
-- **Today**: a deliberately pushy planner. It opens on every new tab, runs focus blocks, gates distracting sites, nudges you when nothing is running, and keeps a journal. It connects to the **Onitry** desktop app, so a focus block started in the browser starts Onitry's screen monitoring on that task.
-- **Notes**: rich notes, drawings, stickies and a Desmos-style graphing calculator, in the side panel or a full tab.
+> The planner that briefly lived here is now its own extension, **Onitry Plan**, in [`onitry-plan/`](onitry-plan/).
 
-## Today (planner)
+## Features
 
-Open a new tab, or the side panel, which remembers whether you last used Today or Notes.
-
-**Plan**
-- **Quick add** understands how you write: `calc hw due thu 40m`, `econ test fri`, `chem summative 10/16`, `email mrs neri`, `~ cad the claw` (the `~` sends it to the "nothing to do" list). Subjects are detected from names and aliases (`bc` → Calc, `ils` → Spanish, `#mate` → MATE).
-- **Paste a brain dump**: every line becomes its own task.
-- **Today list**: things planned for today, due today or tomorrow, overdue, and tests coming up in the next 2 days. Drag to reorder. Each task shows a time slot ("2:30–3:30 PM") laid out end to end from now, and the list warns when the plan runs past your cutoff.
-- **Next 7 days**: a rolling week board with deadlines and tests (tests in red), plus a "Coming up" list. Click a day to add something due that day.
-- **When there's "nothing" to do**: a standing list of projects (CV2, Onitry, CAD, internship emails…) so a free block has a default that isn't YouTube.
-
-**Focus**
-- **"What are you doing right now?"**: start a 15–90 minute focus block on any task, or on something you just type.
-- **While a block runs**: a big timer, the toolbar badge counts down, and "Time's up" asks Done / +10 min.
-- **With Onitry connected**, the block starts Onitry monitoring on that exact task, with context such as what's due and what else is on today's list. Onitry's on/off-task verdict shows in the header and the timer card, and each session records Onitry's on-task percentage.
-
-**Distraction gate (the invasive part)**
-- Gated sites (YouTube, Reddit, Instagram, TikTok, X, Netflix, Twitch, Facebook by default) are redirected to a "Hold up" page that shows what you should be doing.
-- **When it's up (Smart mode, the default)**: during focus blocks, and during work hours whenever something is due by tomorrow. Other modes: focus blocks only, always, or off.
-- **Getting through takes friction**:
-  - A written reason, which is logged to your journal.
-  - A wait that grows with each visit that day (10 s, 20 s, 30 s…).
-  - During a focus block, also typing a sentence word for word (pasting is blocked). Passes are capped at 5 minutes.
-- **When a pass expires**, open tabs on that site are sent back to the gate. Turning the gate on does the same to tabs already open.
-
-**Nudges**
-- **Check-in**: during work hours, if no focus block or Onitry session runs for 30 minutes and you're at the computer, you get "What are you doing right now?" with a button to start your next task.
-- **Plan reminder**: "Plan your afternoon" at 3:30 PM if today's list is empty.
-- **Test reminders**: the evening before a test, with a 25-minute study block button.
-- **End-of-day check-in**: at 10 PM.
-- All times are in ⚙ settings.
-
-**Journal**
-- Timestamped log entries (Enter to log), like your daily notes.
-- Focus sessions, completed tasks and gate passes are logged automatically.
-- **End-of-day check-in**: a mood rating, what got in the way (YouTube, phone, tired…), and tomorrow's first task, which becomes a real task. There's also a check-in streak.
-- **Daily stats**: minutes focused, tasks done, Onitry on-task %, and gate passes. History covers the last 7 days.
-
-### Connecting Onitry
-
-1. Run Onitry (`python gui.py`, or the menu bar app). Onitry now runs a small local bridge on `127.0.0.1:47323`.
-2. In Onitry, open **⚙ Configure** and copy the **browser planner pairing code**.
-3. In Today, open ⚙ → **Onitry**: check *Connect to Onitry*, paste the code, then click **Test connection**.
-
-The bridge only listens on 127.0.0.1. It needs the pairing code and refuses requests from regular web pages, so only the extension can drive it. Details are in `core/bridge.py` in the Monitry repo.
-
-## Notes features
 
 **Rich-text notes**
 - Bold, italic, underline, strikethrough, headings, bulleted/numbered lists, **checklists**, quotes, code blocks, links and dividers
@@ -154,10 +108,6 @@ You can change the Chrome-level shortcuts at `chrome://extensions/shortcuts`.
 | `sidePanel` | The main UI lives in the side panel |
 | `contextMenus` | Right-click clipping and "Draw on this page" |
 | `activeTab`, `scripting` | Inject the drawing overlay into the current tab, but only when you ask for it |
-| `alarms`, `notifications`, `idle` | Focus-block timers, check-in nudges and reminders (no nudges when you're away from the computer) |
-| `declarativeNetRequest` + gated-site host access | Redirect gated sites (YouTube etc.) to the "Hold up" page. Adding a site in settings asks for access to it. |
-| `http://127.0.0.1/*` | Talk to the Onitry desktop app's local bridge |
-| New tab override | Today opens on every new tab, on purpose |
 | `tabs` (optional) | Requested only when you turn on "Notes for the site you're on", to read the current tab's address |
 | `<all_urls>` (optional) | Requested only if you start page drawing from the panel on a tab Inkwell hasn't been invoked on |
 
@@ -174,12 +124,7 @@ lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/s
 lib/mathlib.js        safe math parser/evaluator (no eval)
 lib/graph.js          graph renderer with points of interest
 lib/palettes.js       color palettes (Onitry default)
-today.html/.css/.js   Today planner (new tab page + side panel view)
-guard.html/.css/.js   distraction gate page
-planner-bg.js         service-worker side: focus blocks, gate rules, nudges, badge, Onitry sync
-lib/planner.js        planner model, quick-add parser, dates, storage
-lib/onitry.js         client for the Onitry desktop bridge
-tests/planner.test.js unit tests (node --test tests/planner.test.js)
+onitry-plan/           separate extension: Onitry Plan (planner)
 lib/store.js          chrome.storage wrapper
 lib/icons.js          inline SVG icon set
 content/annotate.js   on-page drawing overlay (injected on demand, isolated in a closed shadow root)

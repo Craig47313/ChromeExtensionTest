@@ -1,5 +1,5 @@
-// Today: the planner dashboard. Runs as the new-tab page and inside the side panel
-// (today.html?view=panel). All persistent logic for focus blocks, the distraction
+// Onitry Plan's dashboard. Runs in the side panel (today.html?view=panel), in its
+// own tab, or as every new tab, depending on the "Where it lives" setting. All persistent logic for focus blocks, the distraction
 // gate and nudges lives in the service worker (planner-bg.js); this page renders
 // state from chrome.storage and sends it commands.
 (() => {
@@ -21,6 +21,7 @@
     passes: {},
     settings: P.DEFAULT_SETTINGS,
     onitry: null,
+    reviews: {},
     weekOffset: 0,
     tab: 'today',
     editId: null,
@@ -40,6 +41,7 @@
     s.innerHTML = InkIcons.svg(name, size);
     return s;
   };
+  const qopts = (day = today()) => ({ courses: state.settings.courses, blocks: state.settings.blocks, today: day });
   const send = (msg) => chrome.runtime.sendMessage(msg).catch((e) => ({ ok: false, error: e.message }));
 
   let toastTimer = 0;
@@ -77,14 +79,15 @@
     return lab;
   }
 
-  // ---------- theme (shared with Inkwell's Appearance settings) ----------
+  // ---------- theme ----------
 
-  async function applyTheme() {
-    const s = await Store.getSettings();
+  function applyTheme() {
+    const s = state.settings;
     const dark = s.theme === 'dark' || (s.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     InkPalettes.apply(document.documentElement, s.palette || InkPalettes.DEFAULT, dark);
   }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
   // ---------- load & sync ----------
 
@@ -96,7 +99,9 @@
     state.journal = d[K.journal] || {};
     state.eod = d[K.eod] || {};
     state.passes = d[K.passes] || {};
+    state.escalatedUntil = (d[K.meta] || {}).escalatedUntil || 0;
     state.settings = await P.getSettings();
+    state.reviews = d[K.reviews] || {};
     if (!state.onitry) state.onitry = d[K.onitry] || null;
   }
 
@@ -114,10 +119,11 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (Object.keys(changes).some((k) => k.startsWith('pl:'))) scheduleRender();
-    if (changes.settings) applyTheme();
+    if (changes[K.focus]) setTimeout(pollOnitry, 300); // Onitry status changes with the block
   });
 
   function render() {
+    applyTheme();
     renderClock();
     renderNow();
     renderToday();
@@ -133,6 +139,10 @@
     const now = new Date();
     $('#dateLine').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     $('#timeLine').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const letter = P.blockLetter(today(), state.settings.blocks);
+    const chip = $('#letterChip');
+    chip.hidden = !letter;
+    chip.textContent = letter ? `${letter} day` : '';
   }
 
   function renderOnitryChip() {
@@ -188,7 +198,12 @@
       const o = state.onitry;
       const status = el('div', 'now-onitry');
       if (state.settings.onitry.enabled) {
-        if (f.onitry && o && o.running) {
+        if (f.onitryPending) {
+          status.textContent = 'Connecting to Onitry…';
+        } else if (state.escalatedUntil > Date.now()) {
+          status.classList.add('bad');
+          status.textContent = `Onitry caught you off task${o && o.activity ? ` (${o.activity})` : ''}. Gate locked for ${Math.ceil((state.escalatedUntil - Date.now()) / 60000)} more min.`;
+        } else if (f.onitry && o && o.running) {
           status.classList.add(o.status === 'off_task' ? 'bad' : 'good');
           status.textContent = o.status === 'off_task' ? `Onitry: off task — ${o.activity || 'get back to it'}` : `Onitry is watching${o.activity ? ` — ${o.activity}` : ''}`;
         } else if (f.onitryError) {
@@ -230,7 +245,7 @@
     const start = () => {
       const typed = input.value.trim();
       if (typed) {
-        const parsed = P.parseQuick(typed, { courses: state.settings.courses });
+        const parsed = P.parseQuick(typed, qopts());
         startFocus({ title: parsed.title, course: parsed.course }, Number(mins.value), true);
       } else if (next) startFocus(next, Number(mins.value));
       else input.focus();
@@ -244,7 +259,8 @@
 
     const g = P.guardState(state.settings, null, state.tasks);
     const hint = el('div', 'now-hint');
-    if (g.active) hint.textContent = `🛡 Distraction gate is up — ${g.urgent} thing${g.urgent === 1 ? '' : 's'} due by tomorrow.`;
+    if (g.active && g.urgent) hint.textContent = `🛡 Distraction gate is up — ${g.urgent} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`;
+    else if (g.active) hint.textContent = '🛡 Distraction gate is up.';
     else if (!open.length) hint.textContent = 'Nothing on today’s list. Add something above, or pick from “nothing to do”.';
     else hint.textContent = `Next up: ${next.title}${next.estimate ? ` (${P.fmtMinutes(next.estimate)})` : ''}`;
     card.append(hint);
@@ -279,8 +295,7 @@
       await P.addTasks([t]);
       taskId = t.id;
     }
-    const res = await send({ type: 'plan:focus', action: 'start', taskId, title: task.title, course: task.course || null, minutes });
-    if (res && res.onitryError) toast(`Focus started. Onitry: ${res.onitryError}`);
+    await send({ type: 'plan:focus', action: 'start', taskId, title: task.title, course: task.course || null, minutes });
   }
 
   // ---------- quick add ----------
@@ -297,7 +312,7 @@
       box.append(el('span', 'pv', `Enter adds ${lines.length} tasks`));
       return;
     }
-    const r = P.parseQuick(lines[0], { courses: state.settings.courses });
+    const r = P.parseQuick(lines[0], qopts());
     const c = courseChip(r.course);
     if (c) box.append(c);
     if (r.someday) box.append(el('span', 'pv', '“nothing to do” list'));
@@ -312,7 +327,7 @@
     const lines = quick.value.split('\n').map((l) => l.trim()).filter(Boolean);
     if (!lines.length) return;
     const base = Date.now();
-    const tasks = lines.map((line, i) => P.makeTask({ ...P.parseQuick(line, { courses: state.settings.courses }), order: base + i }));
+    const tasks = lines.map((line, i) => P.makeTask({ ...P.parseQuick(line, qopts()), order: base + i }));
     await P.addTasks(tasks);
     quick.value = '';
     previewQuick();
@@ -398,6 +413,10 @@
     const now = new Date();
     let startMin = now.getHours() * 60 + now.getMinutes();
     if (state.focus) startMin = Math.max(startMin, Math.round((state.focus.endsAt - new Date().setHours(0, 0, 0, 0)) / 60000));
+    // Homework time starts after the last class (free blocks count as class here).
+    const info = P.dayInfo(today(), state.settings.blocks);
+    if (info.blocks.length) startMin = Math.max(startMin, P.minutesOfDay(info.blocks[info.blocks.length - 1].end));
+    renderBlocks(info, now);
     const queue = open.filter((t) => !(state.focus && state.focus.taskId === t.id));
     const slots = new Map(P.schedule(queue, startMin, 30).map((s) => [s.task.id, s]));
     for (const t of open) ol.append(taskRow(t, { slot: slots.get(t.id), draggable: true }));
@@ -439,6 +458,27 @@
       const d = el('div', 'hu late');
       d.append(el('b', null, `${late.length} overdue`), ` — ${late.map((t) => t.title).slice(0, 3).join(', ')}`);
       hu.append(d);
+    }
+  }
+
+  function renderBlocks(info, now) {
+    const strip = $('#blockStrip');
+    strip.textContent = '';
+    if (!info.blocks.length) return;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const { current } = P.blockAt(info.blocks, nowMin);
+    for (const b of info.blocks) {
+      const past = P.minutesOfDay(b.end) <= nowMin;
+      const cls = ['blk'];
+      if (b === current) cls.push('now');
+      if (past) cls.push('past');
+      if (P.isFreeBlock(b)) cls.push('free');
+      const item = el('div', cls.join(' '));
+      const course = state.settings.courses.find((c) => c.name.toLowerCase() === b.label.toLowerCase() || (c.aliases || []).includes(b.label.toLowerCase()));
+      if (course) item.style.setProperty('--c', course.color);
+      item.append(el('span', 'blk-time', P.hhmm(P.minutesOfDay(b.start))), el('span', 'blk-label', b.label));
+      item.title = `${b.start}–${b.end} ${b.label}`;
+      strip.append(item);
     }
   }
 
@@ -488,8 +528,10 @@
       const head = el('button', 'wk-head');
       head.title = 'Add something due this day';
       head.append(el('span', 'wk-name', d.toLocaleDateString([], { weekday: 'short' })), el('span', 'wk-num', String(d.getDate())));
+      const letter = P.blockLetter(k, state.settings.blocks);
+      if (letter) head.append(el('span', 'wk-letter', letter));
       head.addEventListener('click', () => {
-        const tag = P.daysBetween(today(), k) === 0 ? 'today' : P.daysBetween(today(), k) === 1 ? 'tmrw' : `${d.getMonth() + 1}/${d.getDate()}`;
+        const tag = P.daysBetween(today(), k) === 0 ? 'today' : P.daysBetween(today(), k) === 1 ? 'tmrw' : `${d.getMonth() + 1}/${d.getDate()}`; // dates beat "next B": unambiguous
         quick.value = ` ${tag}`;
         quick.focus();
         quick.setSelectionRange(0, 0);
@@ -559,7 +601,7 @@
     if (e.key !== 'Enter') return;
     const v = e.target.value.trim();
     if (!v) return;
-    const r = P.parseQuick(v, { courses: state.settings.courses });
+    const r = P.parseQuick(v, qopts());
     await P.addTasks([P.makeTask({ ...r, someday: true, plan: null, due: null, kind: 'todo' })]);
     e.target.value = '';
   });
@@ -600,6 +642,7 @@
     $('#streak').textContent = streak ? `🌙 ${streak}-day check-in streak` : '';
 
     renderEod();
+    renderReview();
 
     const list = $('#journalList');
     list.textContent = '';
@@ -623,6 +666,107 @@
       for (const e of es.slice().reverse()) ol.append(entryRow(e));
       det.append(ol);
       hist.append(det);
+    }
+  }
+
+  // ---------- weekly review ----------
+
+  const reviewWeekStart = () => P.weekStart(P.addDays(today(), -1)); // Sunday reviews the week ending today
+  let reviewBusy = false;
+
+  function renderReview() {
+    const box = $('#reviewCard');
+    const week = reviewWeekStart();
+    const saved = state.reviews[week];
+    const st = P.weekStats({ tasks: state.tasks, sessions: state.sessions, journal: state.journal, eod: state.eod, settings: state.settings }, week);
+    const wasOpen = box.querySelector('details') ? box.querySelector('details').open : location.hash.includes('review') || new Date().getDay() === Number(state.settings.weeklyReviewDay);
+    box.textContent = '';
+    const det = el('details', 'rv');
+    det.open = wasOpen;
+    const sum = el('summary');
+    const label = P.fromKey(week).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    sum.append(el('b', null, 'Weekly review'), el('span', 'hist-meta', ` week of ${label}`));
+    det.append(sum);
+
+    const t = st.totals;
+    const grid = el('div', 'rv-stats');
+    const cell = (n, lab) => {
+      const c = el('div', 'rv-stat');
+      c.append(el('b', null, n), el('span', null, lab));
+      return c;
+    };
+    grid.append(cell(String(t.tasksDone), 'done'), cell(P.fmtMinutes(t.focusMinutes), `in ${t.focusBlocks} block${t.focusBlocks === 1 ? '' : 's'}`));
+    if (t.onitryOnTaskPct != null) grid.append(cell(`${t.onitryOnTaskPct}%`, 'on task'));
+    grid.append(cell(String(t.gatePasses), 'gate passes'));
+    if (t.avgRating != null) grid.append(cell(MOODS[Math.round(t.avgRating) - 1] || '·', `avg of ${t.checkIns} check-in${t.checkIns === 1 ? '' : 's'}`));
+    det.append(grid);
+
+    const subj = Object.entries(st.bySubject).sort((a, b) => b[1].done - a[1].done);
+    if (subj.length) {
+      const row = el('div', 'rv-subjects');
+      for (const [name, v] of subj) {
+        const c = courseChip(name) || el('span', 'course', name);
+        c.textContent = `${name} ${v.done}${v.missed ? ` · ${v.missed} missed` : ''}`;
+        row.append(c);
+      }
+      det.append(row);
+    }
+    const sites = Object.entries(st.passSites).sort((a, b) => b[1] - a[1]);
+    if (sites.length) det.append(el('div', 'rv-line', `Unlocked most: ${sites.slice(0, 3).map(([site, n]) => `${site} ×${n}`).join(', ')}`));
+    if (st.missed.length) det.append(el('div', 'rv-line warn', `Missed: ${st.missed.slice(0, 4).map((x) => x.title).join(', ')}`));
+
+    if (saved && saved.text) {
+      const out = el('div', 'rv-text');
+      renderMarkdown(out, saved.text);
+      det.append(out, el('div', 'rv-meta', `Written by Onitry ${P.relDay(P.dateKey(new Date(saved.at))).toLowerCase()} at ${P.fmtTime(saved.at)}`));
+    } else if (saved && saved.error) det.append(el('div', 'rv-line warn', saved.error));
+
+    const btn = el('button', 'btn primary', reviewBusy ? 'Onitry is writing…' : saved && saved.text ? 'Rewrite review' : 'Write my review with Onitry');
+    btn.prepend(icon('sparkle'));
+    btn.disabled = reviewBusy;
+    btn.addEventListener('click', async () => {
+      reviewBusy = true;
+      renderReview();
+      const res = await send({ type: 'plan:review', week });
+      reviewBusy = false;
+      if (res && !res.ok) toast(res.error || 'Review failed');
+      await load();
+      renderReview();
+    });
+    const actions = el('div', 'rv-actions');
+    actions.append(btn);
+    det.append(actions);
+    box.append(det);
+  }
+
+  // Tiny Markdown → DOM (headings, bullets, **bold**). Text nodes only, no innerHTML.
+  function renderMarkdown(root, md) {
+    let list = null;
+    const inline = (parent, text) => {
+      text.split(/(\*\*[^*]+\*\*)/g).forEach((part) => {
+        if (/^\*\*[^*]+\*\*$/.test(part)) parent.append(el('b', null, part.slice(2, -2)));
+        else if (part) parent.append(document.createTextNode(part));
+      });
+    };
+    for (const raw of md.split('\n')) {
+      const line = raw.trim();
+      if (!line) {
+        list = null;
+        continue;
+      }
+      const bullet = line.match(/^[-*•]\s+(.*)$/) || line.match(/^\d+[.)]\s+(.*)$/);
+      if (bullet) {
+        if (!list) root.append((list = el('ul')));
+        const li = el('li');
+        inline(li, bullet[1]);
+        list.append(li);
+        continue;
+      }
+      list = null;
+      const head = line.match(/^#{1,4}\s+(.*)$/);
+      const n = el(head ? 'h4' : 'p');
+      inline(n, head ? head[1] : line);
+      root.append(n);
     }
   }
 
@@ -709,7 +853,7 @@
       if (entry.note) parts.push(entry.note);
       await P.log(parts.join(' — '), 'eod');
       if (entry.tomorrow) {
-        const r = P.parseQuick(entry.tomorrow, { courses: state.settings.courses, today: P.addDays(k, 1) });
+        const r = P.parseQuick(entry.tomorrow, qopts(P.addDays(k, 1)));
         await P.addTasks([P.makeTask({ ...r, order: 0 })]);
       }
       toast('Checked in. Sleep well 🌙');
@@ -779,9 +923,50 @@
     f.onitryAutoStart.checked = s.onitry.autoStart;
     f.onitryAutoStop.checked = s.onitry.autoStop;
     f.courses.value = s.courses.map((c) => `${c.name}: ${(c.aliases || []).join(', ')}`).join('\n');
+    for (const r of f.placement) r.checked = r.value === s.placement;
+    f.theme.value = s.theme;
+    f.palette.textContent = '';
+    for (const [id, p] of Object.entries(InkPalettes.PALETTES)) f.palette.append(new Option(p.name, id));
+    f.palette.value = s.palette;
+    const b = s.blocks;
+    f.blocksEnabled.checked = b.enabled;
+    f.blocksAnchorDate.value = b.anchorDate || '';
+    f.blocksLetters.value = b.letters.join('');
+    fillLetterSelect(b.letters, b.anchorLetter);
+    const days = $('#blocksDays');
+    days.textContent = '';
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((name, i) => {
+      const wd = (i + 1) % 7;
+      const lab = el('label', 'day-pill');
+      const cb = el('input');
+      cb.type = 'checkbox';
+      cb.value = String(wd);
+      cb.checked = b.days.includes(wd);
+      lab.append(cb, el('span', null, name));
+      days.append(lab);
+    });
+    f.blocksSkip.value = b.skip.join('\n');
+    f.blocksSchedule.value = P.formatSchedule(b.schedule, b.letters);
+    f.blocksFreeNudge.checked = b.freeNudge;
+    f.onitryLaunch.checked = s.onitry.launch;
+    f.onitryEscalate.checked = s.onitry.escalate;
+    f.weeklyReviewDay.value = String(s.weeklyReviewDay);
     $('#onitryResult').textContent = '';
     $('#settingsDialog').showModal();
   }
+
+  function parseLetters(text) {
+    const letters = [...new Set(String(text || '').toUpperCase().replace(/[^A-Z]/g, ''))];
+    return letters.length ? letters : P.DEFAULT_BLOCKS.letters;
+  }
+
+  function fillLetterSelect(letters, value) {
+    const sel = $('#settingsForm').blocksAnchorLetter;
+    sel.textContent = '';
+    for (const l of letters) sel.append(new Option(`${l} day`, l));
+    sel.value = letters.includes(value) ? value : letters[0];
+  }
+  $('#settingsForm').blocksLetters.addEventListener('input', (e) => fillLetterSelect(parseLetters(e.target.value), $('#settingsForm').blocksAnchorLetter.value));
 
   function cleanSites(text) {
     return [...new Set(text.split(/[\s,]+/).map((x) => x.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '')).filter((x) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x)))];
@@ -791,7 +976,16 @@
     // Request host access for newly added sites inside the click (needs a user gesture).
     if (e.submitter && e.submitter.value === 'save') {
       const added = cleanSites($('#settingsForm').sites.value).filter((d) => !state.settings.sites.includes(d));
-      if (added.length) chrome.permissions.request({ origins: added.map((d) => `*://*.${d}/*`) }).catch(() => {});
+      const wantTabs = $('#settingsForm').placement.value === 'newtab';
+      const origins = added.map((d) => `*://*.${d}/*`);
+      if (added.length || wantTabs) {
+        chrome.permissions
+          .request({ ...(origins.length ? { origins } : {}), ...(wantTabs ? { permissions: ['tabs'] } : {}) })
+          .then((granted) => {
+            if (wantTabs && !granted) toast('Without the “tabs” permission new tabs can’t open the planner.');
+          })
+          .catch(() => {});
+      }
     }
   });
 
@@ -820,8 +1014,25 @@
       checkinMinutes: Number(f.checkinMinutes.value) || 0,
       focusMinutes: Number(f.focusMinutes.value) || 40,
       courses: courses.length ? courses : P.DEFAULT_COURSES,
+      placement: f.placement.value || 'panel',
+      theme: f.theme.value,
+      palette: f.palette.value,
+      weeklyReviewDay: Number(f.weeklyReviewDay.value),
+      blocks: {
+        ...state.settings.blocks,
+        enabled: f.blocksEnabled.checked,
+        letters: parseLetters(f.blocksLetters.value),
+        anchorDate: f.blocksAnchorDate.value || state.settings.blocks.anchorDate,
+        anchorLetter: f.blocksAnchorLetter.value,
+        days: $$('#blocksDays input:checked').map((x) => Number(x.value)),
+        skip: [...new Set(f.blocksSkip.value.split(/[\s,]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort(),
+        schedule: P.parseSchedule(f.blocksSchedule.value),
+        freeNudge: f.blocksFreeNudge.checked,
+      },
       onitry: {
         ...state.settings.onitry,
+        launch: f.onitryLaunch.checked,
+        escalate: f.onitryEscalate.checked,
         enabled: f.onitryEnabled.checked,
         code: f.onitryCode.value.trim().toUpperCase(),
         autoStart: f.onitryAutoStart.checked,
@@ -843,8 +1054,18 @@
       out.textContent = `Connected ✓ ${res.running ? `— monitoring “${res.task}”` : '— Onitry is idle'}`;
     } else {
       out.classList.add('bad');
-      out.textContent = res.reachable ? `${res.error}. Copy the code from Onitry → ⚙ Configure.` : `${res.error}. Open the Onitry app first (python gui.py or the menu bar app).`;
+      out.textContent = res.reachable ? `${res.error}. Copy the code from Onitry → ⚙ Configure.` : `${res.error}. Press “Launch Onitry”, or open it yourself.`;
     }
+  });
+
+  $('#onitryLaunchBtn').addEventListener('click', async () => {
+    const out = $('#onitryResult');
+    out.className = 'onitry-result';
+    out.textContent = 'Launching Onitry…';
+    const res = await send({ type: 'plan:launch' });
+    out.classList.add(res && res.ok ? 'good' : 'bad');
+    out.textContent = res && res.ok ? (res.launched ? 'Onitry is up ✓' : 'Onitry was already running ✓') : `Couldn’t launch: ${(res && res.error) || 'unknown error'}`;
+    pollOnitry();
   });
 
   // ---------- Onitry polling (fast while this page is visible) ----------
@@ -868,14 +1089,8 @@
     if (b) setTab(b.dataset.tab);
   });
 
-  $('#notesBtn').addEventListener('click', async () => {
-    if (VIEW === 'panel') {
-      await chrome.storage.local.set({ 'ui:view': 'notes' });
-      location.href = 'app.html';
-    } else {
-      location.href = 'app.html?tab=1';
-    }
-  });
+  $('#tabBtn').hidden = VIEW !== 'panel';
+  $('#tabBtn').addEventListener('click', () => send({ type: 'plan:open-tab' }));
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#onitryChip').addEventListener('click', openSettings);
 
@@ -883,11 +1098,10 @@
 
   async function init() {
     for (const n of $$('[data-icon]')) n.insertAdjacentHTML('afterbegin', InkIcons.svg(n.dataset.icon, Number(n.dataset.size) || 18));
-    await applyTheme();
     await P.ensureSeeded();
-    if (VIEW === 'panel') chrome.storage.local.set({ 'ui:view': 'today' });
     await load();
-    setTab(location.hash.includes('eod') || location.hash.includes('journal') ? 'journal' : 'today');
+    applyTheme();
+    setTab(/eod|journal|review/.test(location.hash) ? 'journal' : 'today');
     render();
     previewQuick();
     if (VIEW === 'tab' && !state.focus) quick.focus();

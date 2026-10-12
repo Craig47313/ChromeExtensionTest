@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Today</title>
+  <title>Onitry Plan</title>
   <link rel="icon" href="icons/icon-32.png">
-  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="today.css">
 </head>
 <body class="today-body">
   <div class="t-app">
     <header class="t-head">
       <div class="t-clock">
-        <div class="t-date" id="dateLine"></div>
+        <div class="t-date"><span id="dateLine"></span><span class="letter-chip" id="letterChip" hidden></span></div>
         <div class="t-time" id="timeLine"></div>
       </div>
       <div class="t-head-actions">
         <button class="onitry-chip" id="onitryChip" title="Onitry connection"></button>
-        <button class="icon-btn" id="notesBtn" data-icon="note" title="Notes"></button>
+        <button class="icon-btn" id="tabBtn" data-icon="external" title="Open in its own tab"></button>
         <button class="icon-btn" id="settingsBtn" data-icon="wrench" title="Planner settings"></button>
       </div>
     </header>
@@ -43,6 +43,7 @@
           <h2>Today</h2>
           <span class="col-meta" id="todayMeta"></span>
         </div>
+        <div class="blocks" id="blockStrip"></div>
         <div class="heads-up" id="headsUp"></div>
         <ol class="task-list" id="todayList"></ol>
         <div class="list-foot" id="todayFoot"></div>
@@ -83,6 +84,7 @@
           <span class="col-meta" id="streak"></span>
         </div>
         <div class="stats" id="stats"></div>
+        <section class="review" id="reviewCard"></section>
         <div class="eod" id="eodCard"></div>
         <textarea class="log-input" id="logInput" rows="2" placeholder="What’s going on? Enter to log it with the time."></textarea>
         <ol class="journal-list" id="journalList"></ol>
@@ -127,6 +129,38 @@
     <form method="dialog" id="settingsForm">
       <h3>Planner settings</h3>
 
+      <div class="set-sec">Where it lives</div>
+      <div class="radio-row" role="radiogroup">
+        <label class="radio"><input type="radio" name="placement" value="panel"> <span><b>Side panel</b> next to what you’re doing</span></label>
+        <label class="radio"><input type="radio" name="placement" value="tab"> <span><b>Its own pinned tab</b> (the toolbar button jumps to it)</span></label>
+        <label class="radio"><input type="radio" name="placement" value="newtab"> <span><b>Every new tab</b> opens the planner</span></label>
+      </div>
+      <div class="row2">
+        <label>Theme
+          <select name="theme">
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label>Colors<select name="palette"></select></label>
+      </div>
+
+      <div class="set-sec">Block days</div>
+      <label class="check"><input type="checkbox" name="blocksEnabled"> Show my A/B/C/D rotation and class blocks</label>
+      <div class="row3">
+        <label>Known date<input type="date" name="blocksAnchorDate"></label>
+        <label>was a…<select name="blocksAnchorLetter"></select></label>
+        <label>Letters<input name="blocksLetters" placeholder="ABCD" maxlength="8" spellcheck="false"></label>
+      </div>
+      <div class="set-label">Lettered weekdays (the rest of the school days get no letter)</div>
+      <div class="weekday-row" id="blocksDays"></div>
+      <label>No-school days (one date per line; the rotation pauses)<textarea name="blocksSkip" rows="2" spellcheck="false" placeholder="2026-11-26"></textarea></label>
+      <label>Class schedule: a letter (or <code>Other</code> for unlettered days), then <code>08:00-09:20 Calc</code> lines. Name a block “Free” or “Study” to get nudged during it.
+        <textarea name="blocksSchedule" rows="8" spellcheck="false" placeholder="A&#10;08:00-09:20 Calc&#10;09:30-10:50 Free&#10;&#10;B&#10;08:00-09:20 Physics"></textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="blocksFreeNudge"> Nudge me with a task when a free block starts (the gate also goes up if something’s due)</label>
+
       <div class="set-sec">Distraction gate</div>
       <label>When should distracting sites be gated?
         <select name="guardMode">
@@ -167,6 +201,19 @@
       <div class="onitry-result" id="onitryResult"></div>
       <label class="check"><input type="checkbox" name="onitryAutoStart"> Start Onitry monitoring when a focus block starts</label>
       <label class="check"><input type="checkbox" name="onitryAutoStop"> Stop Onitry when the focus block ends</label>
+      <label class="check"><input type="checkbox" name="onitryLaunch"> Launch Onitry if it isn’t running when a focus block starts</label>
+      <label class="check"><input type="checkbox" name="onitryEscalate"> When Onitry sees me off task: revoke passes and lock the gate for 10 minutes</label>
+      <div class="row2">
+        <label>Weekly review reminder
+          <select name="weeklyReviewDay">
+            <option value="0">Sunday evening</option>
+            <option value="5">Friday evening</option>
+            <option value="6">Saturday evening</option>
+            <option value="-1">Off</option>
+          </select>
+        </label>
+        <label>&nbsp;<button type="button" class="btn" id="onitryLaunchBtn">Launch Onitry</button></label>
+      </div>
 
       <div class="set-sec">Subjects</div>
       <label>One per line: <code>Name: alias, alias</code><textarea name="courses" rows="6" spellcheck="false"></textarea></label>
@@ -180,7 +227,6 @@
 
   <script src="lib/icons.js"></script>
   <script src="lib/palettes.js"></script>
-  <script src="lib/store.js"></script>
   <script src="lib/planner.js"></script>
   <script src="lib/onitry.js"></script>
   <script src="today.js"></script>

@@ -11,13 +11,12 @@
   const settings = await P.getSettings();
   const site = P.matchSite(P.domainOf(target), settings.sites) || P.domainOf(target) || 'this site';
 
-  // Theme from Inkwell's Appearance settings.
-  const app = await Store.getSettings();
-  const dark = app.theme === 'dark' || (app.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = settings.theme === 'dark' || (settings.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  InkPalettes.apply(document.documentElement, app.palette || InkPalettes.DEFAULT, dark);
+  InkPalettes.apply(document.documentElement, settings.palette || InkPalettes.DEFAULT, dark);
 
-  const [focus, tasks, journal] = await Promise.all([P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.journal, {})]);
+  const [focus, tasks, journal, meta] = await Promise.all([P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.journal, {}), P.store.get(K.meta, {})]);
+  const escalated = !!focus && (meta.escalatedUntil || 0) > Date.now();
   const today = P.dateKey();
   const passesToday = (journal[today] || []).filter((e) => e.kind === 'pass');
   const siteVisits = passesToday.filter((e) => e.text.startsWith(site)).length;
@@ -26,8 +25,10 @@
   document.title = `Hold up · ${site}`;
 
   if (focus) {
-    $('#headline').textContent = 'Not now.';
-    $('#why').textContent = `${site} is blocked while you focus.`;
+    $('#headline').textContent = escalated ? 'Onitry saw that.' : 'Not now.';
+    $('#why').textContent = escalated
+      ? `You drifted off task during your focus block, so ${site} is locked for ${Math.ceil((meta.escalatedUntil - Date.now()) / 60000)} more minutes. No passes.`
+      : `${site} is blocked while you focus.`;
     $('#focusBox').hidden = false;
     $('#focusTitle').textContent = focus.title;
     const tick = () => {
@@ -38,8 +39,9 @@
     setInterval(tick, 15000);
   } else {
     const urgent = P.urgentTasks(tasks, today);
+    const free = P.inFreeBlock(settings);
     $('#why').textContent = urgent.length
-      ? `You have ${urgent.length} thing${urgent.length === 1 ? '' : 's'} due by tomorrow.`
+      ? `You have ${urgent.length} thing${urgent.length === 1 ? '' : 's'} due by tomorrow${free ? `, and this is your ${free.label.toLowerCase()} block` : ''}.`
       : `${site} is on your gated list.`;
     $('#focusBtn').hidden = false;
   }
@@ -96,6 +98,7 @@
   const waitSeconds = Math.min(60, 10 * (siteVisits + 1));
 
   $('#passSummary').textContent = strict ? 'Break my focus block anyway' : 'I really need this site';
+  $('#passBox').hidden = escalated;
   $('#count').textContent = siteVisits ? `You’ve already let yourself into ${site} ${siteVisits} time${siteVisits === 1 ? '' : 's'} today.` : '';
   if (strict) {
     $('#sentenceWrap').hidden = false;

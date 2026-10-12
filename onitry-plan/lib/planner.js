@@ -1,5 +1,5 @@
-// InkPlan: data model, natural-language quick add, dates and storage for the
-// "Today" planner. Shared by the Today page, the distraction gate and the
+// InkPlan: data model, natural-language quick add, dates, block days and storage
+// for Onitry Plan. Shared by the Today page, the distraction gate and the
 // service worker; also loads in Node for unit tests.
 (function (g) {
   'use strict';
@@ -103,16 +103,140 @@
     return c ? c.color : '#868e96';
   }
 
+  // ---------- block days (A/B/C/D rotation) ----------
+  // Lettered school days rotate A→B→C→D, skipping weekends, unlettered weekdays
+  // (Monday at this school) and holidays. One known date + letter anchors it.
+
+  const DEFAULT_BLOCKS = {
+    enabled: true,
+    letters: ['A', 'B', 'C', 'D'],
+    anchorDate: '2026-10-13', // a Tuesday that was a C day
+    anchorLetter: 'C',
+    days: [2, 3, 4, 5], // weekdays that get a letter (0 = Sun)
+    schoolDays: [1, 2, 3, 4, 5],
+    skip: [], // no-school dates: the rotation pauses
+    schedule: {}, // { A: [{ start: '08:00', end: '09:20', label: 'Calc' }], …, Other: […] }
+    freeNudge: true,
+  };
+
+  function isLetterDay(k, b) {
+    return b.days.includes(fromKey(k).getDay()) && !b.skip.includes(k);
+  }
+
+  function blockLetter(k, b) {
+    if (!b || !b.enabled || !b.anchorDate || !b.letters || !b.letters.length) return null;
+    if (!isLetterDay(k, b)) return null;
+    const ai = b.letters.indexOf(b.anchorLetter);
+    if (ai < 0 || Math.abs(daysBetween(b.anchorDate, k)) > 1000) return null;
+    const dir = k >= b.anchorDate ? 1 : -1;
+    let n = 0;
+    for (let d = b.anchorDate; d !== k; ) {
+      d = addDays(d, dir);
+      if (isLetterDay(d, b)) n += dir;
+    }
+    // An anchor on a non-letter day names the *next* letter day.
+    if (dir === 1 && !isLetterDay(b.anchorDate, b)) n -= 1;
+    const L = b.letters.length;
+    return b.letters[(((ai + n) % L) + L) % L];
+  }
+
+  function isSchoolDay(k, b) {
+    return !!b && b.enabled && b.schoolDays.includes(fromKey(k).getDay()) && !b.skip.includes(k);
+  }
+
+  // Letter + class blocks for a date.
+  function dayInfo(k, b) {
+    const letter = blockLetter(k, b);
+    const school = isSchoolDay(k, b);
+    const key = letter || (school ? 'Other' : null);
+    const blocks = ((key && b.schedule && b.schedule[key]) || []).slice().sort((x, y) => minutesOfDay(x.start) - minutesOfDay(y.start));
+    return { letter, school, blocks };
+  }
+
+  const FREE_BLOCK = /\b(free|study|flex|open|unscheduled|off)\b/i;
+  const isFreeBlock = (blk) => !!blk && FREE_BLOCK.test(blk.label || '');
+
+  function blockAt(blocks, minute) {
+    let current = null;
+    let next = null;
+    for (const blk of blocks) {
+      const a = minutesOfDay(blk.start);
+      const z = minutesOfDay(blk.end);
+      if (minute >= a && minute < z) current = blk;
+      else if (a > minute && !next) next = blk;
+    }
+    return { current, next };
+  }
+
+  function nextLetterDate(letter, from, b, maxDays = 60) {
+    for (let i = 1; i <= maxDays; i++) {
+      const d = addDays(from, i);
+      if (blockLetter(d, b) === letter) return d;
+    }
+    return null;
+  }
+
+  // Text format for the settings box:
+  //   A
+  //   08:00-09:20 Calc
+  //   09:30-10:50 Free
+  //   Other
+  //   08:00-08:45 Calc
+  function parseSchedule(text) {
+    const out = {};
+    let cur = null;
+    for (const raw of String(text || '').split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      const head = line.match(/^([A-Za-z]|other|mon(?:day)?|no letter)\s*(?:day)?\s*:?\s*$/i);
+      if (head) {
+        cur = head[1].length === 1 ? head[1].toUpperCase() : 'Other';
+        out[cur] = out[cur] || [];
+        continue;
+      }
+      const m = line.match(/^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})\s+(.+)$/);
+      if (m && cur) out[cur].push({ start: normTime(m[1]), end: normTime(m[2]), label: m[3].trim().slice(0, 60) });
+    }
+    return out;
+  }
+
+  function normTime(t) {
+    const [h, m] = t.split(':').map(Number);
+    return `${pad(h)}:${pad(m)}`;
+  }
+
+  function formatSchedule(schedule, letters = DEFAULT_BLOCKS.letters) {
+    const keys = [...letters, 'Other', ...Object.keys(schedule || {}).filter((k) => !letters.includes(k) && k !== 'Other')];
+    return keys
+      .filter((k) => schedule && schedule[k] && schedule[k].length)
+      .map((k) => [k, ...schedule[k].map((x) => `${x.start}-${x.end} ${x.label}`)].join('\n'))
+      .join('\n\n');
+  }
+
   // ---------- quick add ----------
 
   const TEST_WORDS = /\b(test|quiz|exam|summative|midterm|final|assessment|ils|psat|sat)\b/i;
   const DATE_PREPS = new Set(['due', 'on', 'by', 'for', 'before', 'this']);
 
   // Parse one line like "calc hw due thu 40m" or "econ test fri" or "~ cad the claw".
-  function parseQuick(input, { courses = DEFAULT_COURSES, today = dateKey() } = {}) {
+  function parseQuick(input, { courses = DEFAULT_COURSES, today = dateKey(), blocks = null } = {}) {
     let text = String(input || '').trim();
     const out = { title: '', course: null, kind: 'todo', due: null, plan: null, estimate: null, someday: false };
     if (!text) return out;
+
+    // Block days: "due next B", "next c day", "test D day", "on A-day". A bare
+    // letter only counts after "next" or as a capital before "day", so the
+    // article in "a day" or "work on a project" never matches.
+    if (blocks && blocks.enabled) {
+      const letters = blocks.letters.join('');
+      const re = new RegExp(`(?:^|\\s)(?:(?:due|on|by|for|before)\\s+)?(?:next\\s+([${letters}${letters.toLowerCase()}])(?:[\\s-]?day)?|(?:on\\s+)?([${letters}])[\\s-]day)(?=[\\s.,;!?]|$)`);
+      text = text.replace(re, (m, a, b2) => {
+        const due = nextLetterDate((a || b2).toUpperCase(), today, blocks);
+        if (!due) return m;
+        out.due = due;
+        return ' ';
+      });
+    }
 
     if (/^(~|someday\b:?|later:)/i.test(text)) {
       out.someday = true;
@@ -287,7 +411,12 @@
     focusMinutes: 40,
     passMinutes: 10,
     courses: DEFAULT_COURSES,
-    onitry: { enabled: false, code: '', autoStart: true, autoStop: true, port: 47323 },
+    blocks: DEFAULT_BLOCKS,
+    theme: 'system', // system | light | dark
+    palette: 'monitry',
+    placement: 'panel', // panel | tab | newtab
+    weeklyReviewDay: 0, // Sunday evening nudge
+    onitry: { enabled: false, code: '', autoStart: true, autoStop: true, escalate: true, launch: true, port: 47323 },
   };
 
   function inWorkHours(settings, now = new Date()) {
@@ -298,20 +427,32 @@
     return start <= end ? m >= start && m < end : m >= start || m < end;
   }
 
+  // Inside a class block marked free/study on today's school schedule.
+  function inFreeBlock(settings, now = new Date()) {
+    const b = settings.blocks;
+    if (!b || !b.enabled) return null;
+    const { blocks } = dayInfo(dateKey(now), b);
+    const { current } = blockAt(blocks, now.getHours() * 60 + now.getMinutes());
+    return isFreeBlock(current) ? current : null;
+  }
+
   function urgentTasks(tasks, today = dateKey()) {
     const tomorrow = addDays(today, 1);
     return tasks.filter((t) => isOpen(t) && !t.someday && ((t.due && t.due <= tomorrow) || (t.plan && t.plan <= today)));
   }
 
-  // Is the gate up right now, and why?
-  function guardState(settings, focus, tasks, now = new Date()) {
+  // Is the gate up right now, and why? `escalatedUntil`: Onitry caught you off
+  // task during a focus block, which raises the gate even in "off" mode.
+  function guardState(settings, focus, tasks, now = new Date(), escalatedUntil = 0) {
     const mode = settings.guardMode;
+    if (focus && escalatedUntil > now.getTime()) return { active: true, reason: 'onitry', strict: true };
     if (mode === 'off') return { active: false, reason: 'off' };
     if (focus) return { active: true, reason: 'focus', strict: true };
     if (mode === 'focus') return { active: false, reason: 'no focus block' };
     if (mode === 'always') return { active: true, reason: 'always' };
     const urgent = urgentTasks(tasks, dateKey(now));
     if (urgent.length && inWorkHours(settings, now)) return { active: true, reason: 'urgent', urgent: urgent.length };
+    if (urgent.length && inFreeBlock(settings, now)) return { active: true, reason: 'free block', urgent: urgent.length };
     return { active: false, reason: urgent.length ? 'outside work hours' : 'nothing urgent' };
   }
 
@@ -333,6 +474,90 @@
     'I set this focus block for a reason and I am about to break it on purpose.',
   ];
 
+  // ---------- weekly review ----------
+  // Everything the review needs, computed locally. Sent to Onitry (which owns the
+  // API key) for the AI write-up; also rendered as-is in the Journal tab.
+
+  function weekStats({ tasks = [], sessions = [], journal = {}, eod = {}, settings = DEFAULT_SETTINGS }, start) {
+    const end = addDays(start, 7);
+    const t0 = fromKey(start).getTime();
+    const t1 = fromKey(end).getTime();
+    const inWeek = (ts) => ts >= t0 && ts < t1;
+    const round = (n) => Math.round(n);
+
+    const done = tasks.filter((t) => t.done && inWeek(t.done));
+    const missed = tasks.filter((t) => !t.done && !t.someday && t.due && t.due >= start && t.due < end && t.due < dateKey());
+    const bySubject = {};
+    for (const t of done) {
+      const c = t.course || 'Other';
+      bySubject[c] = bySubject[c] || { done: 0, missed: 0 };
+      bySubject[c].done++;
+    }
+    for (const t of missed) {
+      const c = t.course || 'Other';
+      bySubject[c] = bySubject[c] || { done: 0, missed: 0 };
+      bySubject[c].missed++;
+    }
+
+    const ss = sessions.filter((x) => inWeek(x.end));
+    const focusMin = ss.reduce((a, x) => a + x.minutes, 0);
+    const watched = ss.filter((x) => x.onitry && x.onitry.onPct != null);
+    const watchedMin = watched.reduce((a, x) => a + x.minutes, 0);
+    const onPct = watchedMin ? round(watched.reduce((a, x) => a + x.onitry.onPct * x.minutes, 0) / watchedMin) : null;
+
+    const days = [];
+    const passes = [];
+    const passSites = {};
+    for (let d = start; d < end; d = addDays(d, 1)) {
+      const entries = journal[d] || [];
+      const dayStart = fromKey(d).getTime();
+      const daySessions = ss.filter((x) => x.end >= dayStart && x.end < dayStart + DAY);
+      for (const e of entries.filter((x) => x.kind === 'pass')) {
+        passes.push(e.text.slice(0, 160));
+        const site = e.text.split(' ')[0];
+        passSites[site] = (passSites[site] || 0) + 1;
+      }
+      const e = eod[d];
+      days.push({
+        date: d,
+        weekday: WEEKDAYS[fromKey(d).getDay()].slice(0, 3),
+        letter: blockLetter(d, settings.blocks) || undefined,
+        focusMin: daySessions.reduce((a, x) => a + x.minutes, 0),
+        done: done.filter((t) => t.done >= dayStart && t.done < dayStart + DAY).length,
+        rating: e ? e.rating : undefined,
+        derails: e && e.derails && e.derails.length ? e.derails : undefined,
+        notes: entries.filter((x) => x.kind === 'log' || x.kind === 'eod').map((x) => x.text.slice(0, 200)).slice(0, 8),
+      });
+    }
+
+    const ratings = days.filter((d) => d.rating).map((d) => d.rating);
+    const nextWeek = tasks
+      .filter((t) => !t.done && t.due && t.due >= end && t.due < addDays(end, 7))
+      .sort((a, b) => (a.due < b.due ? -1 : 1))
+      .map((t) => ({ title: t.title, subject: t.course || undefined, kind: t.kind, due: t.due }));
+
+    return {
+      week: start,
+      totals: {
+        tasksDone: done.length,
+        tasksMissed: missed.length,
+        focusBlocks: ss.length,
+        focusMinutes: focusMin,
+        finishedOnTime: ss.filter((x) => x.outcome === 'done').length,
+        onitryOnTaskPct: onPct,
+        gatePasses: passes.length,
+        avgRating: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null,
+        checkIns: ratings.length,
+      },
+      bySubject,
+      passSites,
+      passReasons: passes.slice(0, 20),
+      missed: missed.slice(0, 15).map((t) => ({ title: t.title, subject: t.course || undefined, due: t.due })),
+      days,
+      nextWeek: nextWeek.slice(0, 20),
+    };
+  }
+
   // ---------- storage ----------
 
   const K = {
@@ -345,6 +570,7 @@
     settings: 'pl:settings',
     onitry: 'pl:onitry',
     meta: 'pl:meta',
+    reviews: 'pl:reviews',
   };
 
   const store = {
@@ -370,7 +596,12 @@
 
   async function getSettings() {
     const s = await store.get(K.settings, {});
-    return { ...DEFAULT_SETTINGS, ...s, onitry: { ...DEFAULT_SETTINGS.onitry, ...(s.onitry || {}) } };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...s,
+      blocks: { ...DEFAULT_BLOCKS, ...(s.blocks || {}) },
+      onitry: { ...DEFAULT_SETTINGS.onitry, ...(s.onitry || {}) },
+    };
   }
 
   async function setSettings(patch) {
@@ -415,11 +646,13 @@
   }
 
   g.InkPlan = {
-    DAY, WEEKDAYS, COLORS, DEFAULT_COURSES, DEFAULT_SETTINGS, DEFAULT_SITES, STRICT_SENTENCES, K,
+    DAY, WEEKDAYS, COLORS, DEFAULT_COURSES, DEFAULT_SETTINGS, DEFAULT_SITES, DEFAULT_BLOCKS, STRICT_SENTENCES, K,
     dateKey, fromKey, addDays, daysBetween, weekStart, relDay, minutesOfDay, fmtTime, fmtMinutes, hhmm,
     courseIndex, courseColor, parseQuick, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
-    inWorkHours, guardState, domainOf, matchSite,
+    inWorkHours, inFreeBlock, guardState, domainOf, matchSite,
+    blockLetter, isSchoolDay, dayInfo, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
+    weekStats,
     store, getSettings, setSettings, addTasks, updateTask, removeTask, log, ensureSeeded,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
