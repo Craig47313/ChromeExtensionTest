@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onitry Plan guide</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body class="docs-body">
+  <header class="d-top">
+    <a class="d-brand" href="#tutorial"><img src="icons/icon-32.png" width="24" height="24" alt=""> Onitry Plan <span>guide</span></a>
+    <div class="d-top-actions">
+      <button class="icon-btn d-menu" id="menuBtn" data-icon="list" title="Contents" aria-expanded="false" aria-controls="nav"></button>
+      <a class="btn primary" href="today.html">Open planner</a>
+    </div>
+  </header>
+
+  <div class="d-wrap">
+    <nav class="d-nav" id="nav" aria-label="Contents">
+      <div class="d-nav-group">Start here</div>
+      <a href="#tutorial">Tutorial</a>
+      <a href="#overview">What it does</a>
+      <div class="d-nav-group">Using it</div>
+      <a href="#planning">Planning &amp; quick add</a>
+      <a href="#blocks">Block days</a>
+      <a href="#focus">Focus blocks</a>
+      <a href="#gate">The distraction gate</a>
+      <a href="#nudges">Nudges</a>
+      <a href="#journal">Journal &amp; check-ins</a>
+      <a href="#review">Weekly review</a>
+      <a href="#onitry">Onitry</a>
+      <a href="#placement">Where it lives</a>
+      <div class="d-nav-group">How it works</div>
+      <a href="#architecture">Architecture</a>
+      <a href="#how-parser">The quick-add parser</a>
+      <a href="#how-rotation">Block rotation math</a>
+      <a href="#how-gate">Gate rules</a>
+      <a href="#how-alarms">Alarms &amp; nudges</a>
+      <a href="#how-bridge">The Onitry bridge</a>
+      <a href="#how-escalation">Off-task escalation</a>
+      <a href="#how-launch">Launching Onitry</a>
+      <a href="#how-review">Review pipeline</a>
+      <a href="#privacy">Privacy</a>
+      <div class="d-nav-group">Reference</div>
+      <a href="#ref-quick">Quick-add cheat sheet</a>
+      <a href="#ref-settings">Settings</a>
+      <a href="#ref-storage">Storage keys</a>
+      <a href="#ref-permissions">Permissions</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+
+    <main class="d-main">
+
+      <!-- ===================== START HERE ===================== -->
+
+      <section id="tutorial" class="d-sec">
+        <p class="d-kicker">Start here</p>
+        <h1>Tutorial</h1>
+        <p class="d-lead">Ten minutes to a planner that actually knows your week. Each step ticks itself off once you’ve done it in the planner. You can come back here any time from the <b>?</b> button.</p>
+        <div class="tut-progress"><div class="tut-bar"><span id="tutBar"></span></div><span id="tutCount"></span></div>
+        <ol class="tut" id="tutorialSteps">
+          <li data-step="open">
+            <h3>Open the planner</h3>
+            <p>Pin <b>Onitry Plan</b> from Chrome’s puzzle-piece menu, then click it or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>. It opens in the side panel by default. Want it to take a whole tab instead? See <a href="#placement">Where it lives</a>.</p>
+            <a class="btn" href="today.html">Open planner</a>
+          </li>
+          <li data-step="blocks">
+            <h3>Put in your class blocks</h3>
+            <p>Open <b>⚙ → Block days → Edit class blocks</b>, or click the letter next to the date. Pick a day (A, B, C, D, or <i>No letter</i> for Mondays) and press <b>Add block</b> for each class. Each new block starts right after the last one with the same length, so a whole day usually takes a minute. Use <b>Copy from</b> when two days share most of their classes.</p>
+            <p>Call a block <b>Free</b> or <b>Study</b> and you’ll get a nudge with something to do when it starts.</p>
+            <a class="btn" href="today.html#blocks">Edit class blocks</a>
+          </li>
+          <li data-step="anchor">
+            <h3>Check today’s letter</h3>
+            <p>The rotation is counted from one date you know. If the letter next to the date is wrong, open <b>⚙ → Block days</b> and set <i>Known date</i> to any school day you’re sure about. On break? Add it under <b>Breaks &amp; no-school days</b> in the class blocks menu and the rotation pauses until you’re back.</p>
+            <div class="try" id="tryLetter">
+              <label>Check a date <input type="date" id="letterDate"></label>
+              <div class="try-out" id="letterOut"></div>
+              <div class="try-actions"><button type="button" class="btn" id="letterOk">Today’s letter is right ✓</button> <a class="btn" href="today.html#settings">Fix it in settings</a></div>
+            </div>
+          </li>
+          <li data-step="tasks">
+            <h3>Brain-dump your work</h3>
+            <p>Type everything into the <b>Add anything…</b> box, one per line. It reads dates, subjects, tests and time estimates out of plain words. Try it here, it uses your real subjects and block days:</p>
+            <div class="try">
+              <input id="tryQuick" spellcheck="false" placeholder="physics test next D" value="calc hw due tmrw 40m">
+              <div class="try-out" id="tryQuickOut"></div>
+            </div>
+          </li>
+          <li data-step="focus">
+            <h3>Run a focus block</h3>
+            <p>Press <b>▶</b> on a task (or type what you’re doing under <i>What are you doing right now?</i>) and pick a length. The toolbar badge counts down. While it runs, distracting sites are locked hard.</p>
+          </li>
+          <li data-step="gate">
+            <h3>Meet the gate</h3>
+            <p>Open YouTube during a focus block. You land on the gate instead. Getting through needs a written reason, a wait, and during focus a typed sentence. Every pass goes in your journal, so you can see the pattern later.</p>
+          </li>
+          <li data-step="onitry">
+            <h3>Connect Onitry</h3>
+            <p>Start Onitry, open its <b>⚙ Configure</b>, copy the <b>browser planner pairing code</b>, then paste it in <b>⚙ → Onitry</b> here and press <b>Test connection</b>. Now focus blocks start Onitry on the same task, and if it catches you off task the gate locks. To let the planner start Onitry for you, run <code>python native_host/install.py</code> once in the Monitry folder.</p>
+          </li>
+          <li data-step="eod">
+            <h3>Check in at the end of the day</h3>
+            <p>At your check-in time you get a notification. Rate the day, tap what got in the way, and name the first thing for tomorrow. It becomes tomorrow’s first task.</p>
+          </li>
+          <li data-step="review">
+            <h3>Read your first weekly review</h3>
+            <p>On Sunday evening, open <b>Journal → Weekly review</b>. The numbers are always there; press <b>Write my review with Onitry</b> for a short coaching note on the week.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="overview" class="d-sec">
+        <p class="d-kicker">Start here</p>
+        <h2>What it does</h2>
+        <p class="d-lead">Onitry Plan is a school-day planner that pushes back. It knows what’s due, what class you’re in, and, with Onitry, whether you’re actually working, and it gets in the way of the stuff that isn’t.</p>
+        <div class="cards">
+          <div class="card"><b>Plan in plain words</b><p>“econ test fri”, “calc hw due next B 40m”. One task per line, pasted all at once if you like.</p></div>
+          <div class="card"><b>Knows your schedule</b><p>A/B/C/D rotation, your classes, free blocks and breaks. Homework is laid out after your last class.</p></div>
+          <div class="card"><b>Focus blocks</b><p>A timer, a countdown badge, and the strictest version of the gate while it runs.</p></div>
+          <div class="card"><b>The gate</b><p>Distracting sites redirect to a page with your to-do list. Getting through costs a reason, a wait and sometimes a typed sentence.</p></div>
+          <div class="card"><b>Nudges</b><p>Idle check-ins, free-block suggestions, test-tomorrow reminders, a plan prompt and an end-of-day check-in.</p></div>
+          <div class="card"><b>Onitry inside</b><p>Starts screen monitoring on your task, shows on/off task live, locks the gate when you drift, and can launch the app.</p></div>
+          <div class="card"><b>Journal</b><p>Everything you do is timestamped: focus blocks, passes and why, check-ins, notes you type.</p></div>
+          <div class="card"><b>Weekly review</b><p>Your week in numbers, and a short review written by Onitry using your own API key.</p></div>
+        </div>
+      </section>
+
+      <!-- ===================== USING IT ===================== -->
+
+      <section id="planning" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Planning &amp; quick add</h2>
+        <p>The planner has four parts. On a wide screen they sit side by side; in the side panel they’re tabs.</p>
+        <dl class="defs">
+          <dt>Today</dt><dd>What you planned for today (or carried over), homework due today or tomorrow, anything overdue, and tests up to two days out. Each open task gets a time slot laid end to end from now, or from the end of your last class, so you can see when you’ll be done. If that runs past your cutoff (the end of work hours) it tells you to cut something. Drag the <b>⋮⋮</b> handle to reorder.</dd>
+          <dt>Week</dt><dd>A rolling 7 days starting today, so tomorrow is always visible, with each day’s letter. Click a day’s header to add something due that day. Below: everything due in the next three weeks.</dd>
+          <dt>Free time</dt><dd>Projects and ideas for when there’s “nothing” to do. The gate and the free-block nudge suggest these when your list is empty. Press <b>+</b> to put one on today’s list.</dd>
+          <dt>Journal</dt><dd>See <a href="#journal">Journal &amp; check-ins</a>.</dd>
+        </dl>
+        <p>Click any task’s title to edit it: subject, type (to-do, due, test), due date, estimate, whether it’s on today’s list or the free-time list, or delete it (with undo).</p>
+        <p>Quick add tips: <kbd>Enter</kbd> adds, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line, and pasting a whole list adds one task per line. Undated tasks go on today’s list. The full grammar is in the <a href="#ref-quick">cheat sheet</a>.</p>
+      </section>
+
+      <section id="blocks" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Block days</h2>
+        <p>Your school rotates lettered days (A, B, C, D) on some weekdays and has unlettered days on others (Mondays). Onitry Plan works out each date’s letter and shows it next to the date, on the week view, and in the weekly review.</p>
+        <h3>Setting it up</h3>
+        <ol>
+          <li><b>⚙ → Block days.</b> Pick a <i>Known date</i> and what letter it was, which weekdays get letters, and the letters themselves (default <code>ABCD</code>).</li>
+          <li><b>Edit class blocks &amp; breaks</b> opens the class blocks menu. Each day type (each letter, plus <i>No letter</i>) has its own list of blocks with a start, an end and a class name. Class names that match a subject get that subject’s color.</li>
+          <li><b>Breaks &amp; no-school days</b> (same menu): pick a from and to date and press <b>Add break</b>. The rotation pauses on those days. If your school counts holidays as part of the rotation, don’t add them.</li>
+        </ol>
+        <h3>What it changes</h3>
+        <ul>
+          <li>Today shows a strip of your classes with the current one highlighted. Click it to edit.</li>
+          <li>Homework time slots start after your last class.</li>
+          <li>Quick add understands <code>due next B</code>, <code>D day</code>, <code>on A-day</code> and <code>next c day</code>.</li>
+          <li>When a <b>Free</b> or <b>Study</b> block starts, you get a nudge with the top thing on your list, and in Smart gate mode the gate goes up if something’s due by tomorrow.</li>
+        </ul>
+        <p class="note">Blocks are matched as free by the words <i>free, study, flex, open, unscheduled</i> or <i>off</i> anywhere in the name, so “Study hall” and “Free (library)” both count.</p>
+      </section>
+
+      <section id="focus" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Focus blocks</h2>
+        <p>Start one with <b>▶</b> on any task, from the <i>What are you doing right now?</i> card, from the gate page, or from a nudge. Lengths are 15–90 minutes; the default comes from settings, or the task’s estimate.</p>
+        <ul>
+          <li>The toolbar badge shows minutes left (green), minutes over (orange, <code>+5</code>), or <code>!</code> when Onitry says you’re off task (red).</li>
+          <li>When time’s up you get a notification with <b>✓ Done</b> and <b>+10 min</b>.</li>
+          <li><b>Done</b> ticks the task off. <b>Stop</b> ends the block without ticking it.</li>
+          <li>Every block is saved as a session: what, how long, how it ended, and Onitry’s on-task % if it was watching.</li>
+          <li>Starting a new block while one is running ends the old one first.</li>
+        </ul>
+      </section>
+
+      <section id="gate" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>The distraction gate</h2>
+        <p>Gated sites (YouTube, Reddit, Instagram, TikTok, X, Netflix, Twitch and Facebook by default; edit the list in settings) redirect to the gate page while the gate is up. The gate shows what you’re supposed to be doing, what’s still due, or a free-time idea, and a big <b>Back to work</b> button.</p>
+        <table class="tbl">
+          <thead><tr><th>Mode</th><th>The gate is up…</th></tr></thead>
+          <tbody>
+            <tr><td><b>Smart</b> (default)</td><td>During focus blocks, and whenever something is due by tomorrow (or planned for today) during work hours or a free block</td></tr>
+            <tr><td><b>Focus</b></td><td>Only during focus blocks</td></tr>
+            <tr><td><b>Always</b></td><td>All the time</td></tr>
+            <tr><td><b>Off</b></td><td>Never, unless Onitry catches you off task during a focus block</td></tr>
+          </tbody>
+        </table>
+        <h3>Getting a pass</h3>
+        <table class="tbl">
+          <thead><tr><th></th><th>Normal</th><th>During a focus block</th><th>After Onitry catches you</th></tr></thead>
+          <tbody>
+            <tr><td>Reason</td><td>12+ characters, logged</td><td>12+ characters, logged</td><td rowspan="4" class="mid">No passes for 10 minutes</td></tr>
+            <tr><td>Wait</td><td colspan="2">10 s, growing by 10 s for each pass to that site today (max 60 s)</td></tr>
+            <tr><td>Sentence</td><td>—</td><td>Type one out exactly (paste is blocked)</td></tr>
+            <tr><td>Length</td><td>5, 10 or 20 min (or your default, up to 60)</td><td>2 or 5 min</td></tr>
+          </tbody>
+        </table>
+        <p>When a pass expires, any tabs still on that site are sent back to the gate.</p>
+        <p class="note">Adding your own site asks Chrome for access to it. If you decline, that site can’t be gated.</p>
+      </section>
+
+      <section id="nudges" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Nudges</h2>
+        <table class="tbl">
+          <thead><tr><th>Nudge</th><th>When</th><th>Buttons</th></tr></thead>
+          <tbody>
+            <tr><td>No focus block running</td><td>Work hours, nothing running (here or in Onitry), you’ve used the computer in the last 2 minutes, every <i>check-in</i> minutes</td><td>Start the next task · Snooze 30 min</td></tr>
+            <tr><td>Plan your afternoon</td><td>From your plan time, for 3 hours, if today’s list is empty</td><td>Open</td></tr>
+            <tr><td>Free block</td><td>When a Free/Study block starts and no focus block is running</td><td>Start the top task for the rest of the block · Not now</td></tr>
+            <tr><td>Test tomorrow</td><td>After 6 pm, once per test</td><td>Study 25 min</td></tr>
+            <tr><td>End-of-day check-in</td><td>At your check-in time, once a day</td><td>Check in</td></tr>
+            <tr><td>Weekly review</td><td>On your review day, an hour before check-in time</td><td>Open review</td></tr>
+            <tr><td>Onitry caught you off task</td><td>During a focus block, when Onitry reports off task</td><td>Open planner</td></tr>
+          </tbody>
+        </table>
+        <p class="note">On a Mac, notifications only show if Chrome is allowed to send them in <b>System Settings → Notifications → Google Chrome</b>.</p>
+      </section>
+
+      <section id="journal" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Journal &amp; check-ins</h2>
+        <p>The journal is a timestamped log of your day. You add to it by typing in the box (<kbd>Enter</kbd> logs it with the time), and the planner adds to it automatically:</p>
+        <ul>
+          <li><b>▶</b> focus blocks started and stopped (with Onitry’s on-task % at the end)</li>
+          <li><b>✓</b> tasks finished</li>
+          <li><b>🔓</b> every gate pass, with the site, length and your reason</li>
+          <li><b>🔔</b> Onitry catching you off task</li>
+          <li><b>🌙</b> end-of-day check-ins</li>
+        </ul>
+        <p>Above it: today’s focus time, tasks done, Onitry’s on-task %, and gate passes. Below it: the last 7 days, collapsed. Your check-in streak counts consecutive days with a check-in.</p>
+        <p>The <b>end-of-day check-in</b> appears two hours before your check-in time: rate the day, pick what got in the way (YouTube, phone, tired…), and write the first thing for tomorrow. That line is parsed like quick add and becomes a task on tomorrow’s list.</p>
+      </section>
+
+      <section id="review" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Weekly review</h2>
+        <p>Journal → <b>Weekly review</b> shows the week (Monday to Sunday) in numbers: tasks done, focus time and blocks, Onitry’s on-task %, gate passes, your average mood, tasks done and missed per subject, which sites you unlocked most, and what you missed.</p>
+        <p>On Sunday it reviews the week ending today; on Monday it shows the week that just ended; the rest of the week it shows the week so far.</p>
+        <p><b>Write my review with Onitry</b> sends those numbers to the Onitry app, which asks Claude for a short review: one line on how it went, what worked, what slipped, and three concrete things for next week tied to your upcoming deadlines. It’s saved, so it’s still there next time. <a href="#how-review">What gets sent</a>.</p>
+      </section>
+
+      <section id="onitry" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Onitry</h2>
+        <p>Onitry is the desktop app that looks at your screen every few seconds and decides whether you’re on task. The planner and Onitry talk over a local connection on your computer:</p>
+        <ul>
+          <li><b>Starting a focus block starts Onitry</b> on the same task, with context it can use: the subject, when it’s due, and what else is on today’s list.</li>
+          <li><b>The chip</b> in the header shows Onitry’s state: <i>On task</i>, <i>Off task</i>, <i>Onitry watching</i>, <i>idle</i>, <i>not running</i>, or <i>Pair Onitry</i>. The focus card shows what Onitry thinks you’re doing.</li>
+          <li><b>Ending the block stops Onitry</b> (optional) and records its on-task %.</li>
+          <li><b>Off task during a block</b> locks the gate. See <a href="#how-escalation">escalation</a>.</li>
+          <li><b>Launch Onitry</b> (⚙ → Onitry) starts the app if it isn’t running, and a focus block does it automatically if you leave that option on.</li>
+          <li>If you start monitoring from the Onitry window instead, the planner notes it in your journal.</li>
+        </ul>
+        <h3>Pairing</h3>
+        <ol>
+          <li>Run Onitry (<code>python gui.py</code> or the menu bar app).</li>
+          <li>Onitry → <b>⚙ Configure</b> → copy the <b>browser planner pairing code</b>, like <code>K7QM-29XD</code>.</li>
+          <li>Here: <b>⚙ → Onitry</b> → tick <b>Connect</b>, paste the code, press <b>Test connection</b>.</li>
+        </ol>
+        <h3>The launcher (one-time)</h3>
+        <pre><code>cd path/to/Monitry
+python native_host/install.py   # use the Python you run Onitry with
+# then restart Chrome</code></pre>
+      </section>
+
+      <section id="placement" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Where it lives</h2>
+        <p><b>⚙ → Where it lives</b> picks what the toolbar button does:</p>
+        <dl class="defs">
+          <dt>Side panel</dt><dd>The default. The planner sits next to whatever you’re doing. The <b>↗</b> button in its header opens it in a tab.</dd>
+          <dt>Its own pinned tab</dt><dd>The toolbar button jumps to the planner tab, or opens it pinned at the far left if it isn’t open.</dd>
+          <dt>Every new tab</dt><dd>Every new tab opens the planner, so you see your list every time. Chrome asks for the “tabs” permission to recognize new tabs. The address bar won’t have the cursor in it; click it or press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>L</kbd>.</dd>
+        </dl>
+        <p>Notifications always open (or switch to) a planner tab. Theme (light, dark, match system) and colors are in the same section.</p>
+      </section>
+
+      <!-- ===================== HOW IT WORKS ===================== -->
+
+      <section id="architecture" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Architecture</h2>
+        <p>Onitry Plan is a Manifest V3 Chrome extension with no server of its own. Everything lives in your browser profile, except the Onitry app, which runs on your own computer.</p>
+        <figure class="diagram">
+          <svg viewBox="0 0 760 420" role="img" aria-labelledby="archTitle archDesc">
+            <title id="archTitle">How the parts connect</title>
+            <desc id="archDesc">The planner page and gate page read and write chrome.storage. The service worker reacts to storage changes and alarms, writes gate redirect rules, sends notifications, and talks to the Onitry app over localhost and to its launcher through native messaging. Onitry calls the Claude API for the weekly review.</desc>
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+            </defs>
+            <rect x="8" y="8" width="460" height="404" rx="14" class="d-zone"/>
+            <text x="24" y="32" class="d-zone-label">Chrome (your profile)</text>
+            <rect x="496" y="8" width="256" height="404" rx="14" class="d-zone"/>
+            <text x="512" y="32" class="d-zone-label">Your computer</text>
+
+            <g class="d-node"><rect x="28" y="52" width="196" height="64" rx="10"/><text x="126" y="79">Planner page</text><text x="126" y="99" class="d-sub">today.html · panel / tab</text></g>
+            <g class="d-node"><rect x="252" y="52" width="196" height="64" rx="10"/><text x="350" y="79">Gate page</text><text x="350" y="99" class="d-sub">guard.html#&lt;url&gt;</text></g>
+            <g class="d-node accent"><rect x="28" y="168" width="420" height="64" rx="10"/><text x="238" y="195">chrome.storage.local</text><text x="238" y="215" class="d-sub">tasks · focus · sessions · journal · settings · reviews</text></g>
+            <g class="d-node"><rect x="28" y="284" width="420" height="64" rx="10"/><text x="238" y="311">Service worker</text><text x="238" y="331" class="d-sub">planner-bg.js · reacts to storage changes &amp; alarms</text></g>
+            <g class="d-node soft"><rect x="28" y="364" width="420" height="36" rx="8"/><text x="238" y="387" class="d-sub">alarms · notifications · declarativeNetRequest redirect rules · badge</text></g>
+
+            <g class="d-node soft"><rect x="516" y="52" width="216" height="64" rx="10"/><text x="624" y="79">Claude API</text><text x="624" y="99" class="d-sub">weekly review only</text></g>
+            <g class="d-node"><rect x="516" y="168" width="216" height="64" rx="10"/><text x="624" y="195">Onitry app</text><text x="624" y="215" class="d-sub">bridge · 127.0.0.1:47323</text></g>
+            <g class="d-node"><rect x="516" y="284" width="216" height="64" rx="10"/><text x="624" y="311">Native host</text><text x="624" y="331" class="d-sub">com.onitry.host</text></g>
+
+            <path d="M126 116V168" class="d-edge" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <path d="M350 116V168" class="d-edge" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <path d="M238 232V284" class="d-edge" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <path d="M238 348V364" class="d-edge"/>
+            <path d="M448 300H482V200H516" class="d-edge" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <path d="M448 332H516" class="d-edge" marker-end="url(#ah)"/>
+            <path d="M624 284V232" class="d-edge dashed" marker-end="url(#ah)"/>
+            <text x="632" y="262" class="d-edge-label start">launches</text>
+            <path d="M624 168V116" class="d-edge" marker-end="url(#ah)"/>
+          </svg>
+          <figcaption>Pages never talk to each other directly: they read and write storage, and the service worker watches it and does the rest. It reaches Onitry over HTTP with the pairing code, and the launcher through native messaging.</figcaption>
+        </figure>
+        <dl class="defs">
+          <dt>Pages</dt><dd><code>today.html</code> is the planner, the same page in the side panel (<code>?view=panel</code>), a tab, or a new tab. <code>guard.html</code> is the gate; the URL you were trying to reach rides along after the <code>#</code>. <code>docs.html</code> is this guide. All of them re-render when storage changes, so every open copy stays in sync.</dd>
+          <dt>Shared library</dt><dd><code>lib/planner.js</code> holds the data model, dates, the quick-add parser, block rotation, the gate decision and weekly stats. It has no Chrome dependencies apart from the storage helpers, so the same file runs in the pages, the service worker and Node unit tests.</dd>
+          <dt>Service worker</dt><dd><code>background.js</code> loads <code>lib/planner.js</code>, <code>lib/onitry.js</code> and <code>planner-bg.js</code>. It owns everything that has to keep happening with no page open: focus timers, gate rules, nudges, Onitry polling, escalation, the launcher and the review request. Pages send it commands like <code>{type: 'plan:focus', action: 'start'}</code>.</dd>
+          <dt>Why storage is the hub</dt><dd>Chrome can stop the service worker whenever it’s idle, so nothing important lives in its memory. On wake-up it reads storage, recreates its alarms and re-syncs the gate.</dd>
+        </dl>
+      </section>
+
+      <section id="how-parser" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>The quick-add parser</h2>
+        <p><code>parseQuick()</code> turns one line into <code>{title, course, kind, due, plan, estimate, someday}</code>. It runs in passes, each one removing what it understood so the rest becomes the title:</p>
+        <ol>
+          <li><b>Free-time prefix.</b> A leading <code>~</code>, <code>someday:</code> or <code>later:</code> puts it on the free-time list.</li>
+          <li><b>Letter days</b> (only when block days are on). <code>next B</code>, <code>next b day</code>, <code>B day</code>, <code>on B-day</code>. A bare letter only counts after “next” or as a capital before “day”, so “a day” and “work on a project” are left alone. The date is the next date with that letter, after today.</li>
+          <li><b>Estimates.</b> <code>40m</code>, <code>40 min</code>, <code>1h</code>, <code>1.5h</code>, <code>1h30</code>.</li>
+          <li><b>Dates</b>, word by word: <code>today</code>/<code>tonight</code>, <code>tmrw</code>/<code>tomorrow</code>, weekday names (the next one; said on that day it means today), <code>next fri</code> (next week’s), <code>10/16</code>, <code>oct 16</code>, <code>16 oct</code>, <code>in 3 days</code>. A “due”, “on”, “by”, “for” or “before” right in front of a date is dropped. Month/day dates more than two months in the past roll to next year.</li>
+          <li><b>Subject.</b> A <code>#tag</code> wins; otherwise the first word that matches a subject name or alias (⚙ → Subjects). The word stays in the title.</li>
+          <li><b>Type.</b> Words like test, quiz, exam, summative, midterm, final, assessment make it a <i>test</i>; anything with a date is <i>due</i>; the rest are <i>to-dos</i>.</li>
+          <li><b>Today.</b> No date and not free-time? It goes on today’s list.</li>
+        </ol>
+        <div class="try">
+          <label for="tryQuick2">Try a line</label>
+          <input id="tryQuick2" spellcheck="false" value="spanish quiz on C day 20m">
+          <div class="try-out" id="tryQuick2Out"></div>
+        </div>
+      </section>
+
+      <section id="how-rotation" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Block rotation math</h2>
+        <p>You give one anchor: a date and its letter. To find any other date’s letter, <code>blockLetter()</code>:</p>
+        <ol>
+          <li>Returns nothing if the date isn’t a lettered weekday or is a break day.</li>
+          <li>Walks day by day from the anchor to the date, counting only lettered weekdays that aren’t break days (backwards if the date is earlier).</li>
+          <li>Moves that many letters along from the anchor letter, wrapping around: <code>letters[(anchor + n) mod 4]</code>.</li>
+        </ol>
+        <p>If the anchor itself isn’t a lettered day, it names the next lettered day. Because break days aren’t counted, the rotation picks up after a break exactly where it left off. The walk is capped at about three years either side of the anchor.</p>
+        <p><code>dayInfo()</code> then picks the day’s blocks: the letter’s list, or the <i>No letter</i> list for school days without a letter, or nothing on weekends and breaks. <code>blockAt()</code> finds the current and next block by time.</p>
+      </section>
+
+      <section id="how-gate" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Gate rules</h2>
+        <p>The decision and the enforcement are separate.</p>
+        <p><b>Deciding.</b> <code>guardState(settings, focus, tasks, now, escalatedUntil)</code> is a pure function, checked in this order:</p>
+        <ol>
+          <li>Focus block running and Onitry escalation active → up, strict, reason <i>onitry</i>.</li>
+          <li>Mode is Off → down.</li>
+          <li>Focus block running → up, strict.</li>
+          <li>Mode is Focus → down. Mode is Always → up.</li>
+          <li>Smart: something due by tomorrow or planned for today, and you’re in work hours → up. Same but in a Free/Study block → up. Otherwise down.</li>
+        </ol>
+        <p><b>Enforcing.</b> <code>syncGuard()</code> runs whenever tasks, focus, settings, passes or escalation change, and every minute. When the gate is up it writes one <code>declarativeNetRequest</code> redirect rule per gated site without a live pass:</p>
+        <pre><code>regexFilter:  ^https?://([^/]*\.)?youtube\.com([:/?#].*)?$
+resourceTypes: main_frame
+redirect:     chrome-extension://…/guard.html#\0</code></pre>
+        <p>Chrome applies these rules itself before the page loads, so it works even while the service worker sleeps. It’s one rule per site because a single combined pattern hits Chrome’s regex memory limit. Rules use IDs from 1001 up. Only top-level page loads are redirected, so embedded videos on other sites still play.</p>
+        <p>When a site becomes gated, tabs already open on it are sent to the gate too. A pass is stored as <code>{site: expiresAt}</code>; an alarm fires when the next one expires to re-gate it.</p>
+        <div class="try">
+          <div class="try-label">Right now</div>
+          <div class="try-out" id="gateNow"></div>
+        </div>
+      </section>
+
+      <section id="how-alarms" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Alarms &amp; nudges</h2>
+        <table class="tbl">
+          <thead><tr><th>Alarm</th><th>Fires</th><th>Does</th></tr></thead>
+          <tbody>
+            <tr><td><code>plan-tick</code></td><td>Every minute</td><td>Refreshes Onitry’s status, re-syncs the gate and badge, and checks each nudge’s conditions</td></tr>
+            <tr><td><code>plan-onitry</code></td><td>Every 30 s, only during a focus block with Onitry connected</td><td>Polls Onitry; escalates if it reports off task</td></tr>
+            <tr><td><code>plan-focus-end</code></td><td>When the block’s time is up</td><td>The Done / +10 min notification</td></tr>
+            <tr><td><code>plan-pass-expire</code></td><td>When the next gate pass runs out</td><td>Re-gates that site and its open tabs</td></tr>
+          </tbody>
+        </table>
+        <p>Each nudge remembers when it last fired in <code>pl:meta</code> (for example <code>eodPrompted: "2026-10-19"</code>), so it fires once per day, block or test even though the tick runs every minute. The idle check-in uses Chrome’s <code>idle</code> API to make sure you’re actually at the computer.</p>
+      </section>
+
+      <section id="how-bridge" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>The Onitry bridge</h2>
+        <p>Onitry runs a tiny HTTP server (<code>core/bridge.py</code>) bound to <code>127.0.0.1</code> on port <code>47323</code>. The extension calls it with <code>fetch</code>; every call has a short timeout and never throws, so a closed Onitry just shows as “not running”.</p>
+        <table class="tbl">
+          <thead><tr><th>Call</th><th>Body</th><th>Returns</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET /v1/ping</code></td><td>—</td><td>Is Onitry there? Is the code right? (No code needed.)</td></tr>
+            <tr><td><code>GET /v1/status</code></td><td>—</td><td>running, on/off task, task, activity, on- and off-task seconds, interrupts, paused</td></tr>
+            <tr><td><code>POST /v1/task</code></td><td><code>{task, details}</code></td><td>Starts monitoring that task (stopping any other)</td></tr>
+            <tr><td><code>POST /v1/stop</code></td><td><code>{}</code></td><td>Stops monitoring</td></tr>
+            <tr><td><code>POST /v1/review</code></td><td><code>{stats}</code></td><td>The weekly review text</td></tr>
+          </tbody>
+        </table>
+        <h3>Why a web page can’t abuse it</h3>
+        <ul>
+          <li>It only listens on <code>127.0.0.1</code>, so other machines can’t reach it.</li>
+          <li>Everything but ping needs the pairing code in an <code>X-Onitry-Token</code> header. A custom header forces the browser to ask permission first (a CORS preflight), and Onitry only says yes to <code>chrome-extension://</code> origins.</li>
+          <li>Any request from a normal website’s origin is refused outright, and the <code>Host</code> header must be <code>127.0.0.1</code> or <code>localhost</code>, which stops DNS-rebinding tricks.</li>
+          <li>The code is compared in constant time and lives in Onitry’s <code>data/bridge_token</code>. Delete that file to make a new code.</li>
+        </ul>
+        <p>On the Onitry side, bridge requests are handed to the GUI thread through its queue, so a browser click behaves exactly like pressing Start in the Onitry window.</p>
+      </section>
+
+      <section id="how-escalation" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Off-task escalation</h2>
+        <p>During a focus block the service worker polls Onitry every 30 seconds. The first time Onitry reports <code>off_task</code> (and the option is on):</p>
+        <ol>
+          <li><code>escalatedUntil</code> is set to 10 minutes from now in <code>pl:meta</code>.</li>
+          <li>All gate passes are revoked.</li>
+          <li>The gate re-syncs as if every site were newly gated, so open distracting tabs are sent to the gate.</li>
+          <li>A notification and a journal line record it.</li>
+        </ol>
+        <p>While escalated, <code>guardState</code> keeps the gate up even in Off mode, the gate page says “Onitry saw that.” and hides the pass form, and the service worker refuses pass requests. Each further off-task report pushes the 10 minutes out again. Ending the focus block clears it.</p>
+      </section>
+
+      <section id="how-launch" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Launching Onitry</h2>
+        <p>Extensions can’t start programs, but they can talk to a <b>native messaging host</b>: a small program registered with Chrome that only listed extensions may call.</p>
+        <ol>
+          <li><code>native_host/install.py</code> writes a launcher script that runs <code>native_host/host.py</code> with your Python, and registers it as <code>com.onitry.host</code> for Chrome, Chromium, Brave, Edge and Arc. It only allows this extension’s ID, which is fixed by the <code>key</code> in the manifest (<code>dadagbofodnllhcohbhmjkdolklihcgn</code>).</li>
+          <li>When a focus block starts and Onitry isn’t reachable, the extension sends <code>{cmd: "launch"}</code>. Chrome starts the host, which checks whether the bridge port is already open and, if not, starts <code>gui.py</code> detached from Chrome (so closing Chrome doesn’t close Onitry), logging to <code>data/native_launch.log</code>.</li>
+          <li>The extension pings the bridge once a second for up to 20 seconds, then starts the task.</li>
+        </ol>
+        <p>The block starts right away; the focus card shows “Connecting to Onitry…” until this finishes.</p>
+      </section>
+
+      <section id="how-review" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Review pipeline</h2>
+        <ol>
+          <li><code>weekStats()</code> builds the week from your local data: totals, done and missed per subject, which sites you unlocked and your reasons, missed tasks, each day’s letter, focus time, mood, derailers and up to 8 journal lines, plus next week’s deadlines.</li>
+          <li>The service worker posts it to Onitry’s <code>/v1/review</code> (up to 2 minutes).</li>
+          <li>Onitry (<code>ai/review.py</code>) sends it to Claude with a short coaching prompt, using its own API key. The model is <code>claude-opus-5-5</code> unless <code>ONITRY_REVIEW_MODEL</code> says otherwise. If the model declines, Anthropic’s server-side fallback retries on another model.</li>
+          <li>The text comes back and is saved in <code>pl:reviews</code> under the week’s Monday.</li>
+        </ol>
+        <p class="note">This needs Onitry’s dev or BYOK edition (your own API key). The managed edition doesn’t do reviews yet; the numbers still show either way.</p>
+      </section>
+
+      <section id="privacy" class="d-sec">
+        <p class="d-kicker">How it works</p>
+        <h2>Privacy</h2>
+        <ul>
+          <li>All planner data stays in <code>chrome.storage.local</code> in your Chrome profile. There’s no account and no server.</li>
+          <li>The only network calls go to <code>127.0.0.1</code> (Onitry on your own computer).</li>
+          <li>The one thing that leaves your computer is the weekly review, and only when you press the button: Onitry sends that week’s stats, including task titles, gate-pass reasons and journal lines, to the Claude API.</li>
+          <li>Onitry itself sends screenshots to Claude while it’s monitoring; that’s Onitry’s own behavior, configured in Onitry.</li>
+        </ul>
+      </section>
+
+      <!-- ===================== REFERENCE ===================== -->
+
+      <section id="ref-quick" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>Quick-add cheat sheet</h2>
+        <table class="tbl">
+          <thead><tr><th>Type</th><th>Means</th></tr></thead>
+          <tbody>
+            <tr><td><code>calc hw due tmrw 40m</code></td><td>Calc, due tomorrow, 40 minutes</td></tr>
+            <tr><td><code>econ test fri</code></td><td>Econ test this Friday (today, if it’s Friday)</td></tr>
+            <tr><td><code>lang essay next mon</code></td><td>Due Monday of next week</td></tr>
+            <tr><td><code>chem summative 10/16</code> · <code>oct 16</code> · <code>16 oct</code></td><td>A date</td></tr>
+            <tr><td><code>read ch 4 in 3 days</code></td><td>Due three days from now</td></tr>
+            <tr><td><code>physics frq due next B</code> · <code>D day</code> · <code>on A-day</code></td><td>The next date with that letter</td></tr>
+            <tr><td><code>email mrs neri 10m</code></td><td>No date → today’s list</td></tr>
+            <tr><td><code>~ cad the claw</code> · <code>someday: kaggle</code></td><td>Free-time list</td></tr>
+            <tr><td><code>robot wiring #frc</code></td><td>Force a subject</td></tr>
+            <tr><td><code>1h</code> · <code>1.5h</code> · <code>1h30</code> · <code>45 min</code></td><td>Estimates</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ref-settings" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>Settings</h2>
+        <table class="tbl">
+          <thead><tr><th>Setting</th><th>Default</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Where it lives</td><td>Side panel</td><td>Side panel, pinned tab, or every new tab</td></tr>
+            <tr><td>Theme · Colors</td><td>System · Onitry</td><td></td></tr>
+            <tr><td>Block days</td><td>On, 10/13/2026 = C, Tue–Fri lettered</td><td>Class blocks and breaks are in their own menu</td></tr>
+            <tr><td>Gate mode</td><td>Smart</td><td>See <a href="#gate">the gate</a></td></tr>
+            <tr><td>Gated sites</td><td>9 common ones</td><td>One per line; adding asks Chrome for access</td></tr>
+            <tr><td>Default pass</td><td>10 min</td><td>Outside focus blocks, up to 60</td></tr>
+            <tr><td>Work hours</td><td>Weekdays 15:00–23:30, weekends 10:00–23:30</td><td>Used by Smart mode, check-ins and the plan prompt</td></tr>
+            <tr><td>Check-in every</td><td>30 min</td><td>0 turns it off</td></tr>
+            <tr><td>Focus block</td><td>40 min</td><td></td></tr>
+            <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
+            <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
+            <tr><td>Weekly review reminder</td><td>Sunday evening</td><td>Friday, Saturday or off</td></tr>
+            <tr><td>Subjects</td><td>Your 14 subjects</td><td><code>Name: alias, alias</code>, one per line</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ref-storage" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>Storage keys</h2>
+        <table class="tbl">
+          <thead><tr><th>Key</th><th>Holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>pl:tasks</code></td><td>Every task: title, subject, kind, due, plan, estimate, someday, done</td></tr>
+            <tr><td><code>pl:focus</code></td><td>The running focus block, or nothing</td></tr>
+            <tr><td><code>pl:sessions</code></td><td>Finished focus blocks (last 3000)</td></tr>
+            <tr><td><code>pl:journal</code></td><td>Log entries by date</td></tr>
+            <tr><td><code>pl:eod</code></td><td>End-of-day check-ins by date</td></tr>
+            <tr><td><code>pl:passes</code></td><td>Live gate passes: site → expiry</td></tr>
+            <tr><td><code>pl:settings</code></td><td>Everything in ⚙</td></tr>
+            <tr><td><code>pl:onitry</code></td><td>Onitry’s last status</td></tr>
+            <tr><td><code>pl:reviews</code></td><td>Weekly reviews by week</td></tr>
+            <tr><td><code>pl:meta</code></td><td>Nudge bookkeeping, escalation, gate errors</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ref-permissions" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>Permissions</h2>
+        <table class="tbl">
+          <thead><tr><th>Permission</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td><code>storage</code>, <code>unlimitedStorage</code></td><td>Your data, locally</td></tr>
+            <tr><td><code>sidePanel</code></td><td>Side-panel mode</td></tr>
+            <tr><td><code>alarms</code>, <code>notifications</code>, <code>idle</code></td><td>Timers, nudges, “are you at the computer?”</td></tr>
+            <tr><td><code>declarativeNetRequest</code> + the gated sites</td><td>Redirecting to the gate</td></tr>
+            <tr><td><code>http://127.0.0.1/*</code></td><td>Talking to Onitry</td></tr>
+            <tr><td><code>nativeMessaging</code></td><td>The Launch Onitry button</td></tr>
+            <tr><td><code>tabs</code> (asked only if needed)</td><td>“Every new tab” mode</td></tr>
+            <tr><td>Other sites (asked only if needed)</td><td>Gating sites you add yourself</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshooting" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>Troubleshooting</h2>
+        <dl class="defs">
+          <dt>The letter is wrong</dt><dd>Set ⚙ → Block days → Known date to a school day you’re sure of. Check which weekdays get letters, and that breaks are added (or not, if your school keeps counting through them).</dd>
+          <dt>A site isn’t gated</dt><dd>Is the gate up? Check the hint under the focus card, or <a href="#how-gate">Gate rules → Right now</a>. Sites you added need Chrome’s permission; re-save settings to be asked again. Errors show on <code>chrome://extensions</code> → Onitry Plan → Errors.</dd>
+          <dt>“Onitry not running”</dt><dd>Start Onitry, or press ⚙ → Onitry → Launch Onitry. Only one Onitry window can own the bridge port.</dd>
+          <dt>“Pairing code not accepted”</dt><dd>Copy the code again from Onitry → ⚙ Configure. It changes only if <code>data/bridge_token</code> is deleted.</dd>
+          <dt>“Launcher not installed”</dt><dd>Run <code>python native_host/install.py</code> in the Monitry folder, then fully quit and reopen Chrome. If you moved the Monitry folder or changed Python, run it again.</dd>
+          <dt>Review says it needs an API key</dt><dd>Reviews use Onitry’s own key: set it in Onitry (dev or BYOK edition).</dd>
+          <dt>No notifications</dt><dd>macOS: System Settings → Notifications → Google Chrome → allow. Also check Focus / Do Not Disturb.</dd>
+          <dt>New tabs don’t open the planner</dt><dd>“Every new tab” needs the tabs permission. Pick it again in ⚙ and accept Chrome’s prompt.</dd>
+        </dl>
+      </section>
+
+      <section id="faq" class="d-sec">
+        <p class="d-kicker">Reference</p>
+        <h2>FAQ</h2>
+        <dl class="defs">
+          <dt>Can I just turn the gate off?</dt><dd>Yes, ⚙ → Distraction gate → Off. The one exception is Onitry escalation during a focus block, which you can turn off under ⚙ → Onitry.</dd>
+          <dt>Does it work without Onitry?</dt><dd>Everything except live on/off-task status, escalation, launching and the written review. The review numbers still show.</dd>
+          <dt>Is it the same as Inkwell?</dt><dd>No. Inkwell is the notes and drawing extension. They’re separate and share nothing.</dd>
+          <dt>Can I back up my data?</dt><dd>It lives in Chrome’s storage for this extension. Removing the extension deletes it; reloading it in developer mode doesn’t.</dd>
+          <dt>What about my phone?</dt><dd>Not yet. Desktop Chrome only.</dd>
+        </dl>
+      </section>
+
+      <footer class="d-foot">Onitry Plan <span id="version"></span> · part of the Onitry suite</footer>
+    </main>
+  </div>
+
+  <script src="lib/icons.js"></script>
+  <script src="lib/palettes.js"></script>
+  <script src="lib/planner.js"></script>
+  <script src="docs.js"></script>
+</body>
+</html>

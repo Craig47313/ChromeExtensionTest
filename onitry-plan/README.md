@@ -2,6 +2,8 @@
 
 A Chrome extension for school days. It's a planner that pushes back: quick add, focus blocks, a distraction gate, nudges, an end-of-day check-in, A/B/C/D block days, and a weekly review. It also works with **Onitry**, the desktop app that watches your screen to see whether you're on task.
 
+**The full guide is built in:** press **?** in the planner's header (it also opens on first install). It has a self-checking tutorial, a feature overview, a deep dive into how everything works, and reference tables. The source is `docs.html`.
+
 It's a separate extension from Inkwell (the notes app in the parent folder). They don't share anything, so you can install either or both.
 
 ## What it does
@@ -10,6 +12,7 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 - **Quick add** understands plain language: `calc hw due tmrw 40m`, `econ test fri`, `chem summative 10/16`, `~ cad the claw` (the `~` sends it to the free-time list). Paste several lines to add several tasks.
 - **Block days:**
   - Your A/B/C/D rotation shows next to the date and on the week view.
+  - A **class blocks menu** (⚙ → Block days → Edit class blocks, or click the letter): one tab per day type, start/end/class rows that fill in their own times, copy one day to another, and breaks as date ranges.
   - Today's classes appear as a strip at the top of the Today list, with the current block highlighted.
   - Quick add understands `due next B`, `physics test D day` and `next a day`.
   - Holidays pause the rotation.
@@ -81,7 +84,7 @@ If the Monitry changes aren't on GitHub yet, `onitry-patches/` has them as patch
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Click **Load unpacked** and pick this `onitry-plan/` folder.
 3. Pin **Onitry Plan**, then click it.
-4. Open ⚙ and set your **block days**: a date you know the letter of, which weekdays get letters, and your class schedule, one block per line:
+4. The guide opens with a tutorial. Start with **Edit class blocks**: pick a day, press **Add block** for each class, and add any breaks. You can also paste a schedule as text in the same menu:
 
    ```
    A
@@ -118,7 +121,8 @@ Nothing leaves your computer except the weekly review, which Onitry sends to Cla
 manifest.json      MV3 manifest (the "key" pins the extension ID)
 background.js      service worker entry
 planner-bg.js      focus blocks, gate rules, nudges, Onitry sync/escalation/launch, weekly review
-today.html/.css/.js the planner (side panel, tab or new tab)
+today.html/.css/.js the planner (side panel, tab or new tab) + class blocks menu
+docs.html/.css/.js the built-in guide (tutorial, overview, how it works, reference)
 guard.html/.css/.js the distraction gate
 base.css           theme tokens, buttons, dialogs
 lib/planner.js     data model, quick-add parser, block days, weekly stats (also runs in Node)

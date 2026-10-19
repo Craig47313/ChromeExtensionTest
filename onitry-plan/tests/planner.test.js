@@ -187,3 +187,13 @@ test('weekStats totals a week', () => {
   assert.equal(stats.days[1].letter, 'C'); // Tue 10/6
   assert.equal(stats.nextWeek[0].title, 'econ test');
 });
+
+test('breaks expand to dates and collapse back to ranges', () => {
+  const days = P.expandRange('2026-10-19', '2026-10-23');
+  assert.equal(days.length, 5);
+  assert.deepEqual(P.dateRanges([...days, '2026-11-26', '2026-10-21']), [['2026-10-19', '2026-10-23'], ['2026-11-26', '2026-11-26']]);
+  assert.deepEqual(P.expandRange('2026-10-19', '2026-10-01'), ['2026-10-19']); // backwards "to" → one day
+  const b = { ...B, skip: days };
+  assert.equal(P.blockLetter('2026-10-20', b), null); // on break
+  assert.equal(P.blockLetter('2026-10-27', b), P.blockLetter('2026-10-20', B)); // rotation picks up where it paused
+});

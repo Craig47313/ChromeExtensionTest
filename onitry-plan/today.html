@@ -18,6 +18,7 @@
       <div class="t-head-actions">
         <button class="onitry-chip" id="onitryChip" title="Onitry connection"></button>
         <button class="icon-btn" id="tabBtn" data-icon="external" title="Open in its own tab"></button>
+        <button class="icon-btn" id="helpBtn" data-icon="help" title="Guide &amp; docs"></button>
         <button class="icon-btn" id="settingsBtn" data-icon="wrench" title="Planner settings"></button>
       </div>
     </header>
@@ -155,10 +156,10 @@
       </div>
       <div class="set-label">Lettered weekdays (the rest of the school days get no letter)</div>
       <div class="weekday-row" id="blocksDays"></div>
-      <label>No-school days (one date per line; the rotation pauses)<textarea name="blocksSkip" rows="2" spellcheck="false" placeholder="2026-11-26"></textarea></label>
-      <label>Class schedule: a letter (or <code>Other</code> for unlettered days), then <code>08:00-09:20 Calc</code> lines. Name a block “Free” or “Study” to get nudged during it.
-        <textarea name="blocksSchedule" rows="8" spellcheck="false" placeholder="A&#10;08:00-09:20 Calc&#10;09:30-10:50 Free&#10;&#10;B&#10;08:00-09:20 Physics"></textarea>
-      </label>
+      <div class="bd-summary">
+        <div id="blocksSummary" class="set-help"></div>
+        <button type="button" class="btn" id="editBlocksBtn" data-icon="today">Edit class blocks &amp; breaks</button>
+      </div>
       <label class="check"><input type="checkbox" name="blocksFreeNudge"> Nudge me with a task when a free block starts (the gate also goes up if something’s due)</label>
 
       <div class="set-sec">Distraction gate</div>
@@ -221,6 +222,45 @@
       <div class="dialog-actions">
         <button class="btn" value="cancel" formnovalidate>Cancel</button>
         <button class="btn primary" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="blocksDialog" class="t-dialog wide">
+    <form method="dialog" id="blocksForm">
+      <h3>Class blocks</h3>
+      <p class="set-help">Pick a day, then add its classes in order. Call a block <b>Free</b> or <b>Study</b> and you’ll get a nudge with something to work on when it starts.</p>
+      <div class="bd-tabs" id="bdTabs" role="tablist"></div>
+      <div class="bd-tools">
+        <label class="bd-copy">Copy from <select id="bdCopy"></select></label>
+        <button type="button" class="chip" id="bdClear">Clear this day</button>
+      </div>
+      <div class="bd-head" aria-hidden="true"><span>Starts</span><span>Ends</span><span>Class</span></div>
+      <ol class="bd-rows" id="bdRows"></ol>
+      <div class="bd-empty" id="bdEmpty">No blocks yet for this day.</div>
+      <button type="button" class="btn" id="bdAdd" data-icon="plus">Add block</button>
+      <div class="bd-warn" id="bdWarn" role="alert"></div>
+
+      <div class="set-sec">Breaks &amp; no-school days</div>
+      <p class="set-help">The letter rotation pauses on these days and picks up where it left off.</p>
+      <div class="row3">
+        <label>From<input type="date" id="bdFrom"></label>
+        <label>To<input type="date" id="bdTo"></label>
+        <label>&nbsp;<button type="button" class="btn" id="bdAddBreak">Add break</button></label>
+      </div>
+      <div class="bd-breaks" id="bdBreaks"></div>
+
+      <details class="bd-text">
+        <summary>Paste or edit as text</summary>
+        <p class="set-help">One day per heading (<code>A</code>, <code>B</code>… or <code>Other</code>), then one <code>08:00-09:20 Calc</code> line per block.</p>
+        <textarea id="bdText" rows="8" spellcheck="false"></textarea>
+        <button type="button" class="btn" id="bdImport">Use this text</button>
+      </details>
+      <datalist id="bdLabels"></datalist>
+
+      <div class="dialog-actions">
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="save">Save blocks</button>
       </div>
     </form>
   </dialog>

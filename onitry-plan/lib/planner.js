@@ -200,6 +200,26 @@
     return out;
   }
 
+  // Breaks: store every no-school date, show them as ranges.
+  function expandRange(from, to, max = 200) {
+    if (!from) return [];
+    if (!to || to < from) to = from;
+    const out = [];
+    for (let d = from; d <= to && out.length < max; d = addDays(d, 1)) out.push(d);
+    return out;
+  }
+
+  function dateRanges(dates) {
+    const sorted = [...new Set(dates)].sort();
+    const out = [];
+    for (const d of sorted) {
+      const last = out[out.length - 1];
+      if (last && addDays(last[1], 1) === d) last[1] = d;
+      else out.push([d, d]);
+    }
+    return out;
+  }
+
   function normTime(t) {
     const [h, m] = t.split(':').map(Number);
     return `${pad(h)}:${pad(m)}`;
@@ -651,7 +671,7 @@
     courseIndex, courseColor, parseQuick, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, domainOf, matchSite,
-    blockLetter, isSchoolDay, dayInfo, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
+    blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,
     store, getSettings, setSettings, addTasks, updateTask, removeTask, log, ensureSeeded,
   };

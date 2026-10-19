@@ -464,7 +464,18 @@
   function renderBlocks(info, now) {
     const strip = $('#blockStrip');
     strip.textContent = '';
-    if (!info.blocks.length) return;
+    const b = state.settings.blocks;
+    if (!b.enabled) return;
+    if (!info.blocks.length) {
+      const hasAny = Object.values(b.schedule || {}).some((l) => l && l.length);
+      const onBreak = b.skip.includes(today());
+      if (onBreak || !hasAny) {
+        const setup = el('button', 'blk-setup', onBreak ? '🏖 No school today. The rotation is paused.' : '+ Add your class blocks');
+        setup.type = 'button';
+        strip.append(setup);
+      }
+      return;
+    }
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const { current } = P.blockAt(info.blocks, nowMin);
     for (const b of info.blocks) {
@@ -907,6 +918,283 @@
     });
   });
 
+  // ---------- class blocks editor ----------
+
+  const WD_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const blocksDraft = { schedule: {}, skip: [], key: null, letters: [] };
+  const toMin = (t) => (t ? P.minutesOfDay(t) : null);
+  const toHHMM = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  // Letters come from the open settings form if it's showing (it may have unsaved edits).
+  function editorLetters() {
+    return $('#settingsDialog').open ? parseLetters($('#settingsForm').blocksLetters.value) : state.settings.blocks.letters;
+  }
+
+  function dayKeys() {
+    return [...blocksDraft.letters, 'Other'];
+  }
+
+  function keyLabel(k) {
+    if (k !== 'Other') return `${k} day`;
+    const b = state.settings.blocks;
+    const plain = b.schoolDays.filter((d) => !b.days.includes(d)).map((d) => WD_SHORT[d]);
+    return plain.length ? `No letter (${plain.join(', ')})` : 'No letter';
+  }
+
+  function openBlocksEditor(key) {
+    const b = state.settings.blocks;
+    blocksDraft.schedule = JSON.parse(JSON.stringify(b.schedule || {}));
+    blocksDraft.skip = [...(b.skip || [])];
+    blocksDraft.letters = editorLetters();
+    const todayLetter = P.blockLetter(today(), b);
+    blocksDraft.key = key || todayLetter || dayKeys().find((k) => (blocksDraft.schedule[k] || []).length) || blocksDraft.letters[0];
+    const from = $('#bdFrom');
+    from.value = today();
+    $('#bdTo').value = P.addDays(today(), (5 - P.fromKey(today()).getDay() + 7) % 7); // through Friday
+    $('#bdLabels').textContent = '';
+    for (const name of [...state.settings.courses.map((c) => c.name), 'Free', 'Study', 'Lunch', 'Advisory', 'Break']) $('#bdLabels').append(new Option(name));
+    $('#bdText').value = P.formatSchedule(blocksDraft.schedule, blocksDraft.letters);
+    $('#bdWarn').textContent = '';
+    renderBlocksEditor();
+    $('#blocksDialog').showModal();
+  }
+
+  function renderBlocksEditor() {
+    const tabs = $('#bdTabs');
+    tabs.textContent = '';
+    for (const k of dayKeys()) {
+      const n = (blocksDraft.schedule[k] || []).length;
+      const t = el('button', `bd-tab${k === blocksDraft.key ? ' on' : ''}`);
+      t.type = 'button';
+      t.setAttribute('role', 'tab');
+      t.setAttribute('aria-selected', String(k === blocksDraft.key));
+      t.dataset.key = k;
+      t.append(el('span', null, k === 'Other' ? 'No letter' : k), el('small', null, n ? `${n}` : '–'));
+      t.title = keyLabel(k);
+      t.addEventListener('click', () => {
+        blocksDraft.key = k;
+        renderBlocksEditor();
+      });
+      tabs.append(t);
+    }
+
+    const copy = $('#bdCopy');
+    copy.textContent = '';
+    copy.append(new Option('—', ''));
+    for (const k of dayKeys()) if (k !== blocksDraft.key && (blocksDraft.schedule[k] || []).length) copy.append(new Option(keyLabel(k), k));
+    copy.disabled = copy.options.length < 2;
+
+    const rows = $('#bdRows');
+    rows.textContent = '';
+    const list = blocksDraft.schedule[blocksDraft.key] || [];
+    list.forEach((blk, i) => rows.append(blockRow(blk, i)));
+    $('#bdEmpty').hidden = list.length > 0;
+    $('#bdEmpty').textContent = `No blocks yet for ${keyLabel(blocksDraft.key)}.`;
+    renderBreaks();
+    validateBlocks(false);
+  }
+
+  function blockRow(blk, i) {
+    const li = el('li', 'bd-row');
+    const start = el('input', 'bd-start');
+    start.type = 'time';
+    start.value = blk.start || '';
+    start.setAttribute('aria-label', 'Starts');
+    const end = el('input', 'bd-end');
+    end.type = 'time';
+    end.value = blk.end || '';
+    end.setAttribute('aria-label', 'Ends');
+    const label = el('input', 'bd-label');
+    label.value = blk.label || '';
+    label.placeholder = 'Class';
+    label.setAttribute('list', 'bdLabels');
+    label.setAttribute('aria-label', 'Class');
+    label.maxLength = 60;
+    styleBlockRow(li, blk);
+    const del = el('button', 'icon-btn small danger');
+    del.type = 'button';
+    del.title = 'Remove block';
+    del.innerHTML = InkIcons.svg('x', 15);
+    del.addEventListener('click', () => {
+      blocksDraft.schedule[blocksDraft.key].splice(i, 1);
+      renderBlocksEditor();
+    });
+    const sync = () => {
+      Object.assign(blocksDraft.schedule[blocksDraft.key][i], { start: start.value, end: end.value, label: label.value.trim() });
+      validateBlocks(false);
+    };
+    for (const inp of [start, end, label]) inp.addEventListener('input', sync);
+    // Update in place: re-rendering here would swap out a tab mid-click.
+    label.addEventListener('input', () => {
+      styleBlockRow(li, blocksDraft.schedule[blocksDraft.key][i]);
+      updateTabCounts();
+    });
+    li.append(start, end, label, del);
+    return li;
+  }
+
+  function styleBlockRow(li, blk) {
+    const course = state.settings.courses.find((c) => c.name.toLowerCase() === String(blk.label || '').toLowerCase() || (c.aliases || []).includes(String(blk.label || '').toLowerCase()));
+    if (course) li.style.setProperty('--c', course.color);
+    else li.style.removeProperty('--c');
+    li.classList.toggle('free', P.isFreeBlock(blk));
+  }
+
+  function updateTabCounts() {
+    for (const t of $$('#bdTabs .bd-tab')) {
+      const n = (blocksDraft.schedule[t.dataset.key] || []).filter((b) => b.label || b.start || b.end).length;
+      t.querySelector('small').textContent = n ? `${n}` : '–';
+    }
+  }
+
+  $('#bdAdd').addEventListener('click', () => {
+    const list = (blocksDraft.schedule[blocksDraft.key] = blocksDraft.schedule[blocksDraft.key] || []);
+    const last = list[list.length - 1];
+    let start = 8 * 60;
+    let len = 80;
+    if (last && last.end) {
+      const prev = list[list.length - 2];
+      const gap = prev && prev.end && last.start ? Math.max(0, toMin(last.start) - toMin(prev.end)) : 10;
+      start = toMin(last.end) + gap;
+      if (last.start) len = Math.max(5, toMin(last.end) - toMin(last.start));
+    }
+    list.push({ start: toHHMM(start), end: toHHMM(Math.min(start + len, 23 * 60 + 59)), label: '' });
+    renderBlocksEditor();
+    const labels = $$('#bdRows .bd-label');
+    labels[labels.length - 1].focus();
+  });
+
+  $('#bdCopy').addEventListener('change', (e) => {
+    const from = e.target.value;
+    if (!from) return;
+    blocksDraft.schedule[blocksDraft.key] = JSON.parse(JSON.stringify(blocksDraft.schedule[from] || []));
+    renderBlocksEditor();
+    toast(`Copied ${keyLabel(from)} → ${keyLabel(blocksDraft.key)}`);
+  });
+
+  $('#bdClear').addEventListener('click', () => {
+    const before = blocksDraft.schedule[blocksDraft.key] || [];
+    if (!before.length) return;
+    blocksDraft.schedule[blocksDraft.key] = [];
+    renderBlocksEditor();
+    const key = blocksDraft.key;
+    toast(`Cleared ${keyLabel(key)}`, {
+      action: 'Undo',
+      onAction: () => {
+        blocksDraft.schedule[key] = before;
+        renderBlocksEditor();
+      },
+    });
+  });
+
+  function renderBreaks() {
+    const box = $('#bdBreaks');
+    box.textContent = '';
+    const ranges = P.dateRanges(blocksDraft.skip).filter(([, to]) => to >= P.addDays(today(), -30));
+    const fmt = (k) => P.fromKey(k).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    for (const [from, to] of ranges) {
+      const chip = el('span', 'bd-break');
+      chip.append(el('span', null, from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`));
+      if (from <= today() && today() <= to) chip.classList.add('now');
+      const x = el('button', null, '×');
+      x.type = 'button';
+      x.title = 'Remove';
+      x.addEventListener('click', () => {
+        const drop = new Set(P.expandRange(from, to));
+        blocksDraft.skip = blocksDraft.skip.filter((d) => !drop.has(d));
+        renderBreaks();
+      });
+      chip.append(x);
+      box.append(chip);
+    }
+    if (!ranges.length) box.append(el('span', 'set-help', 'No breaks coming up.'));
+  }
+
+  $('#bdAddBreak').addEventListener('click', () => {
+    const from = $('#bdFrom').value;
+    if (!from) return;
+    blocksDraft.skip = [...new Set([...blocksDraft.skip, ...P.expandRange(from, $('#bdTo').value)])].sort();
+    renderBreaks();
+  });
+
+  $('#bdImport').addEventListener('click', () => {
+    const parsed = P.parseSchedule($('#bdText').value);
+    if (!Object.keys(parsed).length) {
+      $('#bdWarn').textContent = 'Couldn’t find any blocks. Start each day with its letter on its own line.';
+      return;
+    }
+    blocksDraft.schedule = parsed;
+    blocksDraft.key = Object.keys(parsed)[0];
+    renderBlocksEditor();
+    toast('Loaded from text. Check it, then Save.');
+  });
+
+  // Returns the cleaned schedule, or null if something must be fixed first.
+  function validateBlocks(final) {
+    const warn = [];
+    let fatal = false;
+    const clean = {};
+    for (const [k, list] of Object.entries(blocksDraft.schedule)) {
+      const rows = (list || []).filter((b) => b.label || b.start || b.end);
+      for (const b of rows) {
+        if (!b.start || !b.end) {
+          fatal = true;
+          warn.push(`${keyLabel(k)}: “${b.label || 'a block'}” needs a start and end time.`);
+        } else if (toMin(b.end) <= toMin(b.start)) {
+          fatal = true;
+          warn.push(`${keyLabel(k)}: “${b.label || 'a block'}” ends before it starts.`);
+        }
+      }
+      const sorted = rows.filter((b) => b.start && b.end).sort((a, b) => toMin(a.start) - toMin(b.start));
+      for (let i = 1; i < sorted.length; i++) {
+        if (toMin(sorted[i].start) < toMin(sorted[i - 1].end)) warn.push(`${keyLabel(k)}: “${sorted[i - 1].label}” and “${sorted[i].label}” overlap.`);
+      }
+      if (sorted.length) clean[k] = sorted.map((b) => ({ start: b.start, end: b.end, label: b.label || 'Class' }));
+    }
+    $('#bdWarn').textContent = final || fatal ? warn.slice(0, 4).join(' ') : warn.filter((w) => w.includes('overlap')).slice(0, 2).join(' ');
+    $$('#bdRows .bd-row').forEach((li, i) => {
+      const b = (blocksDraft.schedule[blocksDraft.key] || [])[i];
+      li.classList.toggle('bad', !!b && (b.label || b.start || b.end) && (!b.start || !b.end || toMin(b.end) <= toMin(b.start)));
+    });
+    return fatal ? null : clean;
+  }
+
+  $('#blocksForm').addEventListener('submit', (e) => {
+    if (e.submitter && e.submitter.value === 'save' && !validateBlocks(true)) e.preventDefault();
+  });
+
+  $('#blocksDialog').addEventListener('close', async () => {
+    if ($('#blocksDialog').returnValue !== 'save') return;
+    const schedule = validateBlocks(true);
+    if (!schedule) return;
+    const blocks = { ...state.settings.blocks, schedule, skip: blocksDraft.skip, enabled: true };
+    state.settings = { ...state.settings, blocks };
+    await P.setSettings({ blocks });
+    if ($('#settingsDialog').open) {
+      $('#settingsForm').blocksEnabled.checked = true;
+      renderBlocksSummary();
+    }
+    const n = Object.values(schedule).reduce((a, l) => a + l.length, 0);
+    toast(`Saved ${n} class block${n === 1 ? '' : 's'}`);
+  });
+
+  function renderBlocksSummary() {
+    const b = state.settings.blocks;
+    const box = $('#blocksSummary');
+    const keys = [...b.letters, 'Other'].filter((k) => (b.schedule[k] || []).length);
+    const upcoming = P.dateRanges(b.skip).filter(([, to]) => to >= today());
+    const parts = [keys.length ? keys.map((k) => `${k === 'Other' ? 'No letter' : k}: ${b.schedule[k].length}`).join(' · ') : 'No class blocks yet.'];
+    if (upcoming.length) parts.push(`${upcoming.length} break${upcoming.length === 1 ? '' : 's'} coming up`);
+    box.textContent = parts.join(' — ');
+  }
+
+  $('#editBlocksBtn').addEventListener('click', () => openBlocksEditor());
+  $('#letterChip').addEventListener('click', () => openBlocksEditor());
+  $('#blockStrip').addEventListener('click', (e) => {
+    const blk = e.target.closest('.blk, .blk-setup');
+    if (blk) openBlocksEditor();
+  });
+
   // ---------- settings ----------
 
   function openSettings() {
@@ -945,8 +1233,7 @@
       lab.append(cb, el('span', null, name));
       days.append(lab);
     });
-    f.blocksSkip.value = b.skip.join('\n');
-    f.blocksSchedule.value = P.formatSchedule(b.schedule, b.letters);
+    renderBlocksSummary();
     f.blocksFreeNudge.checked = b.freeNudge;
     f.onitryLaunch.checked = s.onitry.launch;
     f.onitryEscalate.checked = s.onitry.escalate;
@@ -1025,8 +1312,6 @@
         anchorDate: f.blocksAnchorDate.value || state.settings.blocks.anchorDate,
         anchorLetter: f.blocksAnchorLetter.value,
         days: $$('#blocksDays input:checked').map((x) => Number(x.value)),
-        skip: [...new Set(f.blocksSkip.value.split(/[\s,]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort(),
-        schedule: P.parseSchedule(f.blocksSchedule.value),
         freeNudge: f.blocksFreeNudge.checked,
       },
       onitry: {
@@ -1091,6 +1376,7 @@
 
   $('#tabBtn').hidden = VIEW !== 'panel';
   $('#tabBtn').addEventListener('click', () => send({ type: 'plan:open-tab' }));
+  $('#helpBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('docs.html') }));
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#onitryChip').addEventListener('click', openSettings);
 
@@ -1102,6 +1388,10 @@
     await load();
     applyTheme();
     setTab(/eod|journal|review/.test(location.hash) ? 'journal' : 'today');
+    P.store.update(K.meta, {}, (m) => (m.plannerOpened ? m : { ...m, plannerOpened: Date.now() }));
+    // Links from the guide: today.html#blocks, #settings
+    if (location.hash === '#blocks') openBlocksEditor();
+    else if (location.hash === '#settings') openSettings();
     render();
     previewQuick();
     if (VIEW === 'tab' && !state.focus) quick.focus();

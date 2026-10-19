@@ -34,7 +34,10 @@
     await syncGuard(true);
     await updateFocusBadge();
   }
-  chrome.runtime.onInstalled.addListener(() => boot());
+  chrome.runtime.onInstalled.addListener(({ reason }) => {
+    boot();
+    if (reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('docs.html#tutorial') });
+  });
   chrome.runtime.onStartup.addListener(() => boot());
   boot();
 
