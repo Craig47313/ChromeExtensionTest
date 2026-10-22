@@ -13,6 +13,11 @@
   const FOCUS_END = 'plan-focus-end';
   const PASS_EXPIRE = 'plan-pass-expire';
   const ONITRY_POLL = 'plan-onitry'; // every 30s during a watched focus block
+  const BADGE = 'plan-badge'; // re-draws the badge when its minute count changes
+  const RING_AGAIN = 'plan-ring-again';
+  const TIMEUP_CLOSE = 'plan-timeup-close';
+  const TIMEUP_RING_MS = 2 * 60000; // ring again if nobody answered
+  const TIMEUP_CLOSE_MS = 10 * 60000; // then end the block on its own
   const ESCALATE_MINUTES = 10;
   const TODAY_URL = () => chrome.runtime.getURL('today.html');
   let lastGuardKey = null;
@@ -161,8 +166,11 @@
     if (!focus) return { ok: false };
     const settings = await P.getSettings();
     const now = Date.now();
-    const pausedMs = (focus.pausedMs || 0) + (focus.pausedAt ? now - focus.pausedAt : 0);
-    const minutes = Math.max(1, Math.round((now - focus.startedAt - pausedMs) / 60000));
+    clearTimeUpAlarms();
+    // A block nobody answered ends when its time ran out, not 10 minutes later.
+    const end = outcome === 'timeup' && focus.timeUpAt ? focus.timeUpAt : now;
+    const pausedMs = (focus.pausedMs || 0) + (focus.pausedAt ? end - focus.pausedAt : 0);
+    const minutes = Math.max(1, Math.round((end - focus.startedAt - pausedMs) / 60000));
     let onitry = null;
     if (focus.onitry) {
       const st = await OnitryBridge.status(settings.onitry);
@@ -172,7 +180,7 @@
       }
       if (settings.onitry.autoStop && !keepOnitry) await OnitryBridge.stop(settings.onitry);
     }
-    const session = { id: focus.id, taskId: focus.taskId, title: focus.title, course: focus.course, kind: focus.kind || 'focus', start: focus.startedAt, end: now, minutes, planned: focus.minutes, outcome, onitry };
+    const session = { id: focus.id, taskId: focus.taskId, title: focus.title, course: focus.course, kind: focus.kind || 'focus', start: focus.startedAt, end, minutes, planned: focus.minutes, outcome, onitry };
     await P.store.update(K.sessions, [], (all) => all.concat([session]).slice(-3000));
     if ((outcome === 'done' || (focus.kind === 'break' && outcome === 'timeup')) && focus.taskId) await P.updateTask(focus.taskId, { done: now });
     await P.store.set(K.focus, null);
@@ -262,8 +270,10 @@
     const focus = await P.store.get(K.focus, null);
     if (!focus) return { ok: false };
     focus.endsAt = Math.max(focus.endsAt, Date.now()) + minutes * 60000;
+    focus.timeUpAt = null;
     await P.store.set(K.focus, focus);
     chrome.alarms.create(FOCUS_END, { when: focus.endsAt });
+    clearTimeUpAlarms();
     chrome.notifications.clear('focus-end');
     await updateFocusBadge();
     return { ok: true, focus };
@@ -271,26 +281,77 @@
 
   // ---------- badge ----------
 
+  // Older versions also wrote a per-tab copy of the badge, which never got cleared
+  // and left a stale "1m" on that tab. Per-tab text can be reset to the global one;
+  // per-tab color can't, so every tab gets the current color whenever it changes.
+  let tabsCleaned = false;
+  let lastColor = null;
+
   async function updateFocusBadge() {
     const focus = await P.store.get(K.focus, null);
+    const offTask = P.isFocusing(focus) && lastOnitryStatus && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task';
+    const b = P.badgeFor(focus, { offTask });
+    const tabs = !tabsCleaned || b.color !== lastColor ? await chrome.tabs.query({}).catch(() => []) : [];
+    if (!tabsCleaned) {
+      tabsCleaned = true;
+      for (const t of tabs) await chrome.action.setBadgeText({ tabId: t.id, text: null }).catch(() => {});
+    }
+    if (b.color !== lastColor) {
+      lastColor = b.color;
+      await chrome.action.setBadgeBackgroundColor({ color: b.color }).catch(() => {});
+      for (const t of tabs) await chrome.action.setBadgeBackgroundColor({ tabId: t.id, color: b.color }).catch(() => {});
+    }
+    await chrome.action.setBadgeText({ text: b.text }).catch(() => {});
     if (!focus) {
-      await chrome.action.setBadgeText({ text: '' }).catch(() => {});
       await chrome.action.setTitle({ title: 'Onitry Plan' }).catch(() => {});
+      chrome.alarms.clear(BADGE);
       return;
     }
-    const left = Math.round((P.focusEndsAt(focus) - Date.now()) / 60000);
-    const offTask = P.isFocusing(focus) && lastOnitryStatus && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task';
-    const text = focus.pausedAt ? '❚❚' : offTask ? '!' : left >= 0 ? `${left}m` : `+${-left}`;
-    const color = focus.pausedAt ? '#6b6b6b' : offTask ? '#d9363e' : focus.kind === 'break' ? '#1971c2' : left >= 0 ? '#2ea043' : '#e8590c';
-    // Global badge, and also on the active tab so per-tab note counts don't hide it.
-    await chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
-    await chrome.action.setBadgeText({ text }).catch(() => {});
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
-    if (tab) {
-      await chrome.action.setBadgeBackgroundColor({ color, tabId: tab.id }).catch(() => {});
-      await chrome.action.setBadgeText({ text, tabId: tab.id }).catch(() => {});
+    const state = focus.timeUpAt ? 'Time’s up' : focus.pausedAt ? 'Paused' : focus.kind === 'break' ? 'Break' : 'Focusing';
+    await chrome.action.setTitle({ title: `${state}: ${focus.title}` }).catch(() => {});
+    // Re-draw exactly when the minute count changes (open planner pages also update it every second).
+    const now = Date.now();
+    const ms = P.focusEndsAt(focus, now) - now;
+    if (focus.pausedAt || focus.timeUpAt || ms <= 60000) chrome.alarms.clear(BADGE);
+    else chrome.alarms.create(BADGE, { when: P.focusEndsAt(focus, now) - (Math.ceil(ms / 60000) - 1) * 60000 + 50 });
+  }
+
+  // ---------- the alarm ----------
+
+  // Service workers can't play sound, so a hidden offscreen page does it.
+  async function ringAlarm(repeats = 3, { force = false } = {}) {
+    const settings = await P.getSettings();
+    if (!settings.alarmSound && !force) return { ok: false, off: true };
+    try {
+      const open = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+      if (!open.length) await chrome.offscreen.createDocument({ url: 'offscreen.html', reasons: ['AUDIO_PLAYBACK'], justification: 'Ring when a focus block ends' });
+      for (let i = 0; i < 3; i++) {
+        try {
+          return await chrome.runtime.sendMessage({ type: 'alarm:play', repeats });
+        } catch (err) {
+          await new Promise((r) => setTimeout(r, 150)); // page still loading
+        }
+      }
+      return { ok: false, error: 'alarm page didn’t answer' };
+    } catch (err) {
+      console.warn('Onitry Plan alarm failed', err);
+      return { ok: false, error: err.message };
     }
-    await chrome.action.setTitle({ title: `${focus.pausedAt ? 'Paused' : focus.kind === 'break' ? 'Break' : 'Focusing'}: ${focus.title}` }).catch(() => {});
+  }
+
+  // No next block (or back to back is off): ring, show "Time's up", wait for an answer.
+  async function timeUp(focus) {
+    await P.store.set(K.focus, { ...focus, timeUpAt: Date.now() });
+    chrome.alarms.create(RING_AGAIN, { when: Date.now() + TIMEUP_RING_MS });
+    chrome.alarms.create(TIMEUP_CLOSE, { when: Date.now() + TIMEUP_CLOSE_MS });
+    await updateFocusBadge();
+    ringAlarm(3);
+    await notify('focus-end', `⏰ Time’s up: ${focus.title}`, `${P.fmtMinutes(focus.minutes)} done. Finished, or a few more minutes?`, ['✓ Done', '+5 min'], true);
+  }
+
+  function clearTimeUpAlarms() {
+    chrome.alarms.clear(RING_AGAIN);
+    chrome.alarms.clear(TIMEUP_CLOSE);
   }
 
   // ---------- distraction gate ----------
@@ -306,7 +367,16 @@
     return live;
   }
 
-  async function syncGuard(force = false) {
+  // Gate updates run one at a time: overlapping ones each read the old rules and
+  // then both tried to add rule 1001 ("does not have a unique ID").
+  let guardChain = Promise.resolve();
+  function syncGuard(force = false) {
+    const run = guardChain.then(() => syncGuardNow(force));
+    guardChain = run.catch(() => {});
+    return run;
+  }
+
+  async function syncGuardNow(force = false) {
     const [settings, focus, tasks, meta] = await Promise.all([P.getSettings(), P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.meta, {})]);
     const passes = await activePasses();
     const gs = P.guardState(settings, focus, tasks, new Date(), meta.escalatedUntil || 0);
@@ -331,10 +401,14 @@
     const existing = await chrome.declarativeNetRequest.getDynamicRules();
     try {
       await chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: existing.filter((r) => r.id >= GUARD_RULE_BASE && r.id < GUARD_RULE_BASE + 1000).map((r) => r.id),
+        // Also remove the ids we're about to add, so this can never collide.
+        removeRuleIds: [...new Set([...existing.filter((r) => r.id >= GUARD_RULE_BASE && r.id < GUARD_RULE_BASE + 1000).map((r) => r.id), ...addRules.map((r) => r.id)])],
         addRules,
       });
+      const meta = await P.store.get(K.meta, {});
+      if (meta.guardError) await P.store.set(K.meta, { ...meta, guardError: null });
     } catch (err) {
+      lastGuardKey = null; // try again next time
       console.error('Onitry Plan gate rules failed', err);
       await P.store.update(K.meta, {}, (m) => ({ ...m, guardError: String(err && err.message) }));
     }
@@ -557,7 +631,7 @@
   }
 
   // Handy for debugging from the service-worker console.
-  Object.assign(PlanBg, { tick, syncGuard, focusStart, focusStop, focusPause, focusResume, advance, nextScheduled, grantPass, checkOnitry, runReview, openPlannerTab });
+  Object.assign(PlanBg, { ringAlarm, updateFocusBadge, tick, syncGuard, focusStart, focusStop, focusPause, focusResume, advance, nextScheduled, grantPass, checkOnitry, runReview, openPlannerTab });
 
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === TICK) tick();
@@ -573,7 +647,7 @@
       if (expired.length && gs.active) await gateOpenTabs(expired);
     } else if (alarm.name === FOCUS_END) {
       const focus = await P.store.get(K.focus, null);
-      if (!focus || focus.pausedAt || Date.now() < focus.endsAt - 1000) return;
+      if (!focus || focus.pausedAt || focus.timeUpAt || Date.now() < focus.endsAt - 1000) return;
       const settings = await P.getSettings();
       const next = settings.autoAdvance ? await nextScheduled(focus.taskId) : null;
       if (next && next.id !== focus.taskId) {
@@ -582,11 +656,23 @@
         await advance('timeup');
         const head = focus.kind === 'break' ? 'Break’s over' : `Time’s up: ${focus.title}`;
         const body = `Now: ${next.title}${next.kind === 'break' ? '' : ` (${P.fmtMinutes(P.taskMinutes(next, settings.focusMinutes))})`}.${focus.kind === 'break' ? '' : ' Did you finish?'}`;
+        ringAlarm(2);
         await notify('advance', head, body, focus.kind === 'break' ? ['❚❚ Pause'] : [`✓ Finished ${focus.title}`.slice(0, 40), '❚❚ Pause'], false);
-      } else {
-        await notify('focus-end', `Time’s up: ${focus.title}`, `${P.fmtMinutes(focus.minutes)} block finished. Done, or need more time?`, ['✓ Done', '+10 min'], true);
-      }
+      } else await timeUp(focus);
       await updateFocusBadge();
+    } else if (alarm.name === BADGE) {
+      await updateFocusBadge();
+    } else if (alarm.name === RING_AGAIN) {
+      const focus = await P.store.get(K.focus, null);
+      if (!focus || !focus.timeUpAt) return;
+      ringAlarm(2);
+      await notify('focus-end', `⏰ Still time’s up: ${focus.title}`, 'Finished, or a few more minutes? The block ends by itself soon.', ['✓ Done', '+5 min'], true);
+    } else if (alarm.name === TIMEUP_CLOSE) {
+      const focus = await P.store.get(K.focus, null);
+      if (!focus || !focus.timeUpAt) return;
+      chrome.notifications.clear('focus-end');
+      await focusStop('timeup');
+      await P.log('Block ended after time ran out (no answer)', 'focus');
     }
   });
 
@@ -604,8 +690,8 @@
     chrome.notifications.clear(id);
     const settings = await P.getSettings();
     if (id === 'focus-end') {
-      if (index === 0) await focusStop('done');
-      else await focusExtend(10);
+      if (index === 0) await (settings.autoAdvance ? advance('done') : focusStop('done'));
+      else await focusExtend(5);
     } else if (id === 'checkin') {
       const meta = await P.store.get(K.meta, {});
       const tasks = await P.store.get(K.tasks, []);
@@ -656,6 +742,7 @@
     } else if (msg.type === 'plan:pass') job = grantPass(msg);
     else if (msg.type === 'plan:guard-state') job = syncGuard(true);
     else if (msg.type === 'plan:review') job = runReview(msg.week);
+    else if (msg.type === 'plan:test-alarm') job = ringAlarm(1, { force: true });
     else if (msg.type === 'plan:launch') job = P.getSettings().then((s) => OnitryBridge.ensureRunning(s.onitry));
     else if (msg.type === 'plan:open-tab') job = openPlannerTab(msg.hash || '').then(() => ({ ok: true }));
     if (!job) return false;

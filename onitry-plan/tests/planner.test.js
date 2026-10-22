@@ -259,3 +259,17 @@ test('paused and break blocks are not strict focus', () => {
   assert.equal(P.guardState(s, { title: 'x', pausedAt: 1 }, [], now).active, false);
   assert.equal(P.guardState(s, { title: 'break', kind: 'break' }, [], now).active, false);
 });
+
+test('badge: minutes round up, seconds at the end, never counts over', () => {
+  const now = 1_000_000;
+  const f = (ms, extra = {}) => P.badgeFor({ startedAt: now - 1, endsAt: now + ms, ...extra }, { now });
+  assert.equal(f(25 * 60000).text, '25m');
+  assert.equal(f(24 * 60000 + 1).text, '25m');
+  assert.equal(f(60000).text, '1m');
+  assert.equal(f(59000).text, '<1m');
+  assert.equal(P.badgeFor({ endsAt: now + 42000 }, { now, seconds: true }).text, '42s');
+  assert.equal(f(-180000).text, 'END'); // no "+3"
+  assert.equal(f(5000, { timeUpAt: now }).text, 'END');
+  assert.equal(f(5000, { pausedAt: now }).text, '❚❚');
+  assert.equal(P.badgeFor(null).text, '');
+});

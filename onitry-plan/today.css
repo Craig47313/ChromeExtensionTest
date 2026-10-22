@@ -424,3 +424,14 @@ body.today-body { overflow-y: auto; background: var(--bg); }
 .ev-meta .due { font-size: 11px; }
 .ev-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
 .ev-task:hover .ev-resize::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 22px; margin-left: -11px; height: 3px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
+
+/* ---------- time's up ---------- */
+
+.now-bar.timeup { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); animation: timeup-pulse 1.6s ease-in-out 4; }
+.now-bar.timeup .nb-label { color: var(--danger); }
+.nb-timer.is-up { font-size: 26px; color: var(--danger); }
+.nb-timer.soon { color: #e8590c; }
+@keyframes timeup-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--danger) 10%, transparent); } }
+.check-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.t-dialog .check-row label.check { margin: 0; }
+.ev-focus.timeup { box-shadow: 0 0 0 2px var(--danger); }

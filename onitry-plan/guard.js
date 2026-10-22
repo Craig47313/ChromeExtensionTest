@@ -33,8 +33,8 @@
     $('#focusBox').hidden = false;
     $('#focusTitle').textContent = focus.title;
     const tick = () => {
-      const left = Math.round((focus.endsAt - Date.now()) / 60000);
-      $('#focusLeft').textContent = left >= 0 ? `${left} min left — you can do this.` : `${-left} min over your planned time. Wrap up or extend in Today.`;
+      const left = Math.ceil((focus.endsAt - Date.now()) / 60000);
+      $('#focusLeft').textContent = focus.timeUpAt || left < 0 ? 'Time’s up. Mark it done or add a few minutes in the planner.' : `${Math.max(1, left)} min left — you can do this.`;
     };
     tick();
     setInterval(tick, 15000);

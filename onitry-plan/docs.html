@@ -186,11 +186,16 @@
           <li><b>Skip</b> moves it to the end of today and starts the next block.</li>
           <li><b>Stop</b> ends the block and stops the run, without ticking anything off.</li>
         </ul>
+        <h3>When a block ends</h3>
+        <p>An alarm rings (a three-note chime; turn it off or test it in <b>⚙ → Work hours &amp; nudges</b>).</p>
+        <ul>
+          <li><b>Back to back, with a next block:</b> the next block starts, and a notification asks if you finished the last one.</li>
+          <li><b>Nothing next (or back to back off):</b> the bar turns red and says <b>⏰ Time’s up</b>, with <b>Done</b>, <b>+5 min</b>, <b>+10 min</b> and <b>Stop</b>. It doesn’t count up. If you don’t answer, it rings again after 2 minutes, and after 10 minutes the block ends by itself (logged as ending when the time ran out).</li>
+        </ul>
         <h3>Breaks</h3>
         <p>A line starting with <code>break</code>, <code>rest</code>, <code>snack</code>, <code>nap</code>, <code>walk</code>, <code>dinner</code>, <code>lunch</code>, <code>shower</code> or <code>stretch</code> is a break block (10 minutes unless you say otherwise). During a break the gate isn’t strict, Onitry is paused, and the break ticks itself off when it ends. Breaks don’t count toward your focus time.</p>
         <ul>
-          <li>The toolbar badge shows minutes left (green; blue for a break), minutes over (orange, <code>+5</code>), <code>❚❚</code> when paused, or <code>!</code> when Onitry says you’re off task (red).</li>
-          <li>Without back to back, the end of a block sends a notification with <b>✓ Done</b> and <b>+10 min</b> instead.</li>
+          <li>The toolbar badge shows minutes left, rounded up (<code>3m</code> means up to 3 minutes; green, blue for a break), <code>&lt;1m</code> in the last minute (seconds while a planner page is open), <code>❚❚</code> when paused, <code>END</code> when time’s up, or <code>!</code> when Onitry says you’re off task. It goes blank the moment no block is running.</li>
           <li>Every block is saved as a session: what, how long, how it ended, and Onitry’s on-task % if it was watching.</li>
           <li>Starting a new block while one is running ends the old one first.</li>
         </ul>
@@ -415,7 +420,9 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
           <tbody>
             <tr><td><code>plan-tick</code></td><td>Every minute</td><td>Refreshes Onitry’s status, re-syncs the gate and badge, and checks each nudge’s conditions</td></tr>
             <tr><td><code>plan-onitry</code></td><td>Every 30 s, only during a focus block with Onitry connected</td><td>Polls Onitry; escalates if it reports off task</td></tr>
-            <tr><td><code>plan-focus-end</code></td><td>When the block’s time is up (cleared while paused)</td><td>Starts the next block on the schedule, or the Done / +10 min notification</td></tr>
+            <tr><td><code>plan-focus-end</code></td><td>When the block’s time is up (cleared while paused)</td><td>Rings, then starts the next block or shows Time’s up</td></tr>
+            <tr><td><code>plan-badge</code></td><td>Each time the badge’s minute count changes</td><td>Keeps the badge exact with no page open</td></tr>
+            <tr><td><code>plan-ring-again</code> · <code>plan-timeup-close</code></td><td>2 and 10 minutes after an unanswered Time’s up</td><td>Rings again; then ends the block</td></tr>
             <tr><td><code>plan-pass-expire</code></td><td>When the next gate pass runs out</td><td>Re-gates that site and its open tabs</td></tr>
           </tbody>
         </table>
@@ -537,6 +544,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td>Check-in every</td><td>30 min</td><td>0 turns it off</td></tr>
             <tr><td>Default block length</td><td>40 min</td><td>For blocks without an estimate</td></tr>
             <tr><td>Run back to back</td><td>On</td><td>Start the next block when one ends</td></tr>
+            <tr><td>Alarm when a block ends</td><td>On</td><td>With a Test sound button</td></tr>
             <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
             <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
             <tr><td>Weekly review reminder</td><td>Sunday evening</td><td>Friday, Saturday or off</td></tr>
@@ -574,6 +582,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>storage</code>, <code>unlimitedStorage</code></td><td>Your data, locally</td></tr>
             <tr><td><code>sidePanel</code></td><td>Side-panel mode</td></tr>
             <tr><td><code>alarms</code>, <code>notifications</code>, <code>idle</code></td><td>Timers, nudges, “are you at the computer?”</td></tr>
+            <tr><td><code>offscreen</code></td><td>Playing the alarm sound (service workers can’t play audio)</td></tr>
             <tr><td><code>declarativeNetRequest</code> + the gated sites</td><td>Redirecting to the gate</td></tr>
             <tr><td><code>http://127.0.0.1/*</code></td><td>Talking to Onitry</td></tr>
             <tr><td><code>nativeMessaging</code></td><td>The Launch Onitry button</td></tr>
@@ -593,6 +602,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
           <dt>“Pairing code not accepted”</dt><dd>Copy the code again from Onitry → ⚙ Configure. It changes only if <code>data/bridge_token</code> is deleted.</dd>
           <dt>“Launcher not installed”</dt><dd>Run <code>python native_host/install.py</code> in the Monitry folder, then fully quit and reopen Chrome. If you moved the Monitry folder or changed Python, run it again.</dd>
           <dt>Review says it needs an API key</dt><dd>Reviews use Onitry’s own key: set it in Onitry (dev or BYOK edition).</dd>
+          <dt>No alarm sound</dt><dd>Check ⚙ → Ring an alarm, press Test sound, and check your Mac’s volume. Chrome plays it, so it follows Chrome’s sound settings.</dd>
           <dt>No notifications</dt><dd>macOS: System Settings → Notifications → Google Chrome → allow. Also check Focus / Do Not Disturb.</dd>
           <dt>New tabs don’t open the planner</dt><dd>“Every new tab” needs the tabs permission. Pick it again in ⚙ and accept Chrome’s prompt.</dd>
         </dl>

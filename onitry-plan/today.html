@@ -189,6 +189,10 @@
         <label>Default block length (min)<input type="number" name="focusMinutes" min="5" max="240" step="5"></label>
       </div>
       <label class="check"><input type="checkbox" name="autoAdvance"> Run my schedule back to back: when a block ends, start the next one</label>
+      <div class="check-row">
+        <label class="check"><input type="checkbox" name="alarmSound"> Ring an alarm when a block ends</label>
+        <button type="button" class="chip" id="alarmTest">▶ Test sound</button>
+      </div>
       <div class="row2">
         <label>“Plan your afternoon” reminder<input type="time" name="planTime"></label>
         <label>End-of-day check-in<input type="time" name="eodTime"></label>

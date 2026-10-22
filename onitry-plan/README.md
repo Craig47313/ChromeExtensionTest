@@ -27,7 +27,8 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 **Focus**
 - **Focus blocks in succession:** press Start and the schedule runs itself; when a block ends, the next one starts (and you're asked if you finished). The bar above the schedule has **Pause / Resume**, Done, +10, Skip and Stop. Pausing also pauses Onitry and slides the rest of the day later.
 - **Break blocks** (`break`, `snack`, `dinner`, `walk`…) loosen the gate, pause Onitry and tick themselves off.
-- The toolbar badge counts down (`❚❚` while paused).
+- **An alarm rings when a block ends.** With nothing next, the bar turns red with **⏰ Time's up** (Done / +5 / +10 / Stop) instead of counting up; it rings again after 2 minutes and ends the block itself after 10.
+- The toolbar badge counts down accurately (minutes rounded up, seconds in the last minute while the planner is open, `❚❚` paused, `END` time's up) and clears the moment nothing's running.
 - **Distraction gate:** YouTube, Reddit and other sites redirect to a page that shows what's due. To get through, you write a reason (it's logged to your journal) and wait. The wait grows each time you come back. During a focus block you also have to type out a sentence, and passes are capped at 5 minutes.
 - **When the gate is up:**
 
@@ -111,6 +112,7 @@ Requires Chrome 116 or later.
 | `storage`, `unlimitedStorage` | Everything is stored locally |
 | `sidePanel` | The planner can live in the side panel |
 | `alarms`, `notifications`, `idle` | Nudges, focus timers, checking you're at the computer |
+| `offscreen` | Playing the end-of-block alarm (service workers can't play audio) |
 | `declarativeNetRequest` + the gated sites | Redirect distracting sites to the gate |
 | `http://127.0.0.1/*` | Talk to the Onitry app on your machine |
 | `nativeMessaging` | Launch Onitry (only if you install its launcher) |

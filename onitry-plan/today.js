@@ -219,6 +219,32 @@
     const nowMin = nowMinutes();
     bar.className = 'now-bar';
 
+    if (f && (f.timeUpAt || (!f.pausedAt && f.endsAt <= Date.now()))) {
+      // Time's up: no counting up, just a clear choice.
+      bar.classList.add('timeup');
+      const info = el('div', 'nb-info');
+      const top = el('div', 'nb-top');
+      top.append(el('span', 'nb-label', '⏰ Time’s up'));
+      const chip = courseChip(f.course);
+      if (chip) top.append(chip);
+      info.append(top, el('div', 'nb-title', f.title));
+      const timer = el('div', 'nb-timer is-up', 'Done?');
+      timer.id = 'focusTimer';
+      const actions = el('div', 'nb-actions');
+      actions.append(
+        actionBtn(f.kind === 'break' ? 'End break' : 'Done', 'check', 'primary', () => send({ type: 'plan:focus', action: 'done' }), state.settings.autoAdvance ? 'Done — start the next block' : 'Done'),
+        actionBtn('+5 min', null, '', () => send({ type: 'plan:focus', action: 'extend', minutes: 5 })),
+        actionBtn('+10 min', null, '', () => send({ type: 'plan:focus', action: 'extend', minutes: 10 })),
+        actionBtn('Stop', null, 'ghost', () => send({ type: 'plan:focus', action: 'stop', outcome: 'timeup' }), 'End this block without ticking it off')
+      );
+      bar.append(info, timer, actions);
+      const then = P.nextUp(events, nowMin);
+      if (then && state.settings.autoAdvance) bar.append(el('div', 'nb-then', `Done starts: ${then.task.title}`));
+      document.title = `⏰ Time’s up · ${f.title}`;
+      return;
+    }
+
+    if (!f) document.title = 'Onitry Plan';
     if (f) {
       bar.classList.add(f.pausedAt ? 'paused' : f.kind === 'break' ? 'break' : 'running');
       const info = el('div', 'nb-info');
@@ -269,30 +295,39 @@
     if (g.active) bar.append(el('div', 'nb-hint', `🛡 Gate is up — ${g.urgent || 'some'} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`));
   }
 
+  let lastBadge = '';
   function tickTimer() {
     const f = state.focus;
+    // While a planner page is open it keeps the badge exact to the second.
+    if (!document.hidden || lastBadge) {
+      const offTask = P.isFocusing(f) && state.onitry && state.onitry.running && state.onitry.status === 'off_task';
+      const b = P.badgeFor(f, { offTask, seconds: true });
+      if (b.text !== lastBadge) {
+        lastBadge = b.text;
+        chrome.action.setBadgeText({ text: b.text }).catch(() => {});
+        chrome.action.setBadgeBackgroundColor({ color: b.color }).catch(() => {});
+      }
+    }
     const t = $('#focusTimer');
     if (!f || !t) return;
+    if (!f.pausedAt && !f.timeUpAt && f.endsAt <= Date.now()) {
+      renderNow(); // just ran out: switch to "Time's up" (the service worker rings)
+      return;
+    }
+    if (f.timeUpAt) return;
     const now = f.pausedAt || Date.now();
-    const left = f.endsAt - now;
-    const over = left < 0;
-    const s = Math.abs(Math.round(left / 1000));
+    const left = Math.max(0, f.endsAt - now);
+    const s = Math.ceil(left / 1000);
     const mm = Math.floor(s / 60);
     const ss = String(s % 60).padStart(2, '0');
-    t.textContent = `${over ? '+' : ''}${mm}:${ss}`;
-    t.classList.toggle('over', over);
+    t.textContent = `${mm}:${ss}`;
     t.classList.toggle('paused', !!f.pausedAt);
+    t.classList.toggle('soon', !f.pausedAt && left < 60000);
     const total = f.endsAt - f.startedAt - (f.pausedMs || 0);
     const pct = Math.min(100, ((now - f.startedAt - (f.pausedMs || 0)) / Math.max(1, total)) * 100);
     const bar = $('#focusBar span');
-    if (bar) {
-      bar.style.width = `${pct}%`;
-      bar.parentElement.classList.toggle('over', over);
-    }
-    document.title = `${f.pausedAt ? '❚❚ ' : ''}${over ? '+' : ''}${mm}:${ss} · ${f.title}`;
-    // Keep the running block on the calendar growing with the clock.
-    const ev = $('.ev-focus');
-    if (ev && over) ev.style.height = `${Math.max(22, (nowMinutes() - Number(ev.dataset.start)) * PX - 2)}px`;
+    if (bar) bar.style.width = `${pct}%`;
+    document.title = `${f.pausedAt ? '❚❚ ' : ''}${mm}:${ss} · ${f.title}`;
   }
 
   function startTask(t) {
@@ -548,7 +583,9 @@
       if (f.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, f.course));
       node.classList.toggle('break', f.kind === 'break');
       node.classList.toggle('paused', !!f.pausedAt);
-      node.append(el('span', 'ev-title', f.title), el('span', 'ev-time', f.pausedAt ? 'Paused' : `Now · until ${P.hhmm(ev.end)}`));
+      const up = f.timeUpAt || (!f.pausedAt && f.endsAt <= Date.now());
+      node.classList.toggle('timeup', !!up);
+      node.append(el('span', 'ev-title', f.title), el('span', 'ev-time', up ? '⏰ Time’s up' : f.pausedAt ? 'Paused' : `Now · until ${P.hhmm(ev.end)}`));
       return node;
     }
 
@@ -1357,6 +1394,7 @@
     f.checkinMinutes.value = s.checkinMinutes;
     f.focusMinutes.value = s.focusMinutes;
     f.autoAdvance.checked = s.autoAdvance;
+    f.alarmSound.checked = s.alarmSound;
     f.onitryEnabled.checked = s.onitry.enabled;
     f.onitryCode.value = s.onitry.code;
     f.onitryAutoStart.checked = s.onitry.autoStart;
@@ -1452,6 +1490,7 @@
       checkinMinutes: Number(f.checkinMinutes.value) || 0,
       focusMinutes: Number(f.focusMinutes.value) || 40,
       autoAdvance: f.autoAdvance.checked,
+      alarmSound: f.alarmSound.checked,
       courses: courses.length ? courses : P.DEFAULT_COURSES,
       placement: f.placement.value || 'panel',
       theme: f.theme.value,
@@ -1493,6 +1532,11 @@
       out.classList.add('bad');
       out.textContent = res.reachable ? `${res.error}. Copy the code from Onitry → ⚙ Configure.` : `${res.error}. Press “Launch Onitry”, or open it yourself.`;
     }
+  });
+
+  $('#alarmTest').addEventListener('click', async () => {
+    const res = await send({ type: 'plan:test-alarm' });
+    if (!res || !res.ok) toast(`Couldn’t play the alarm: ${(res && res.error) || 'unknown error'}`);
   });
 
   $('#onitryLaunchBtn').addEventListener('click', async () => {

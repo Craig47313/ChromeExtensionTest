@@ -444,6 +444,20 @@
     return focus.pausedAt ? focus.endsAt + (now - focus.pausedAt) : focus.endsAt;
   }
 
+  // Toolbar badge for a running block. Minutes round *up* (so "3m" means up to 3
+  // minutes left); `seconds` switches the last minute to a seconds countdown.
+  function badgeFor(focus, { now = Date.now(), offTask = false, seconds = false } = {}) {
+    if (!focus) return { text: '', color: '#2ea043' };
+    if (focus.timeUpAt) return { text: 'END', color: '#d9363e' };
+    if (focus.pausedAt) return { text: '❚❚', color: '#6b6b6b' };
+    if (offTask) return { text: '!', color: '#d9363e' };
+    const ms = focusEndsAt(focus, now) - now;
+    const color = focus.kind === 'break' ? '#1971c2' : '#2ea043';
+    if (ms <= 0) return { text: 'END', color: '#d9363e' };
+    if (ms < 60000) return { text: seconds ? `${Math.ceil(ms / 1000)}s` : '<1m', color: '#e8590c' };
+    return { text: `${Math.ceil(ms / 60000)}m`, color };
+  }
+
   function layoutDay({ tasks = [], focus = null, sessions = [], settings = DEFAULT_SETTINGS, today = dateKey(), now = new Date(), defaultMinutes = 30 } = {}) {
     const dayStart = fromKey(today).getTime();
     const nowMin = (now.getTime() - dayStart) / 60000;
@@ -550,6 +564,7 @@
     eodTime: '22:00',
     focusMinutes: 40,
     autoAdvance: true, // when a block ends, start the next one on the schedule
+    alarmSound: true, // ring when a block ends
     passMinutes: 10,
     courses: DEFAULT_COURSES,
     blocks: DEFAULT_BLOCKS,
@@ -796,7 +811,7 @@
     courseIndex, courseColor, parseQuick, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
-    taskMinutes, focusEndsAt, layoutDay, nextUp, assignLanes, domainOf, matchSite,
+    taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, assignLanes, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,
     store, getSettings, setSettings, addTasks, updateTask, removeTask, log, ensureSeeded,
