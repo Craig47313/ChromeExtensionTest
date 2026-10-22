@@ -125,8 +125,8 @@
   function render() {
     applyTheme();
     renderClock();
-    renderNow();
     renderToday();
+    renderNow();
     renderWeek();
     renderSomeday();
     renderJournal();
@@ -177,125 +177,126 @@
     chip.title = o && o.activity ? `Onitry: ${o.activity}` : 'Onitry connection (click for settings)';
   }
 
-  // ---------- now card ----------
+  // ---------- now bar: what's running, or what's next ----------
+
+  const nowMinutes = () => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+  };
+
+  function onitryLine(f) {
+    const o = state.onitry;
+    const status = el('div', 'nb-onitry');
+    if (!state.settings.onitry.enabled || f.kind === 'break') return null;
+    if (f.onitryPending) status.textContent = 'Connecting to Onitry…';
+    else if (state.escalatedUntil > Date.now()) {
+      status.classList.add('bad');
+      status.textContent = `Onitry caught you off task${o && o.activity ? ` (${o.activity})` : ''}. Gate locked for ${Math.ceil((state.escalatedUntil - Date.now()) / 60000)} more min.`;
+    } else if (f.pausedAt) status.textContent = 'Onitry is paused too.';
+    else if (f.onitry && o && o.running) {
+      status.classList.add(o.status === 'off_task' ? 'bad' : 'good');
+      status.textContent = o.status === 'off_task' ? `Onitry: off task — ${o.activity || 'get back to it'}` : `Onitry is watching${o.activity ? ` — ${o.activity}` : ''}`;
+    } else if (f.onitryError) {
+      status.classList.add('warn');
+      status.textContent = `Onitry: ${f.onitryError}`;
+    } else return null;
+    return status;
+  }
+
+  function actionBtn(label, iconName, cls, onClick, title) {
+    const b = el('button', `btn ${cls || ''}`.trim(), label);
+    if (iconName) b.prepend(icon(iconName));
+    if (title) b.title = title;
+    b.addEventListener('click', onClick);
+    return b;
+  }
 
   function renderNow() {
-    const card = $('#nowCard');
-    card.textContent = '';
+    const bar = $('#nowBar');
+    bar.textContent = '';
     const f = state.focus;
-    card.classList.toggle('running', !!f);
+    const events = layoutCache.length ? layoutCache : computeLayout();
+    const nowMin = nowMinutes();
+    bar.className = 'now-bar';
+
     if (f) {
-      const top = el('div', 'now-top');
-      top.append(el('span', 'now-label', 'Focusing on'));
+      bar.classList.add(f.pausedAt ? 'paused' : f.kind === 'break' ? 'break' : 'running');
+      const info = el('div', 'nb-info');
+      const top = el('div', 'nb-top');
+      top.append(el('span', 'nb-label', f.pausedAt ? '❚❚ Paused' : f.kind === 'break' ? 'Break' : 'Focusing'));
       const chip = courseChip(f.course);
       if (chip) top.append(chip);
-      const title = el('div', 'now-title', f.title);
-      const timer = el('div', 'now-timer');
+      info.append(top, el('div', 'nb-title', f.title));
+      const timer = el('div', 'nb-timer');
       timer.id = 'focusTimer';
-      const bar = el('div', 'now-bar');
-      bar.append(el('span'));
-      bar.id = 'focusBar';
-      const o = state.onitry;
-      const status = el('div', 'now-onitry');
-      if (state.settings.onitry.enabled) {
-        if (f.onitryPending) {
-          status.textContent = 'Connecting to Onitry…';
-        } else if (state.escalatedUntil > Date.now()) {
-          status.classList.add('bad');
-          status.textContent = `Onitry caught you off task${o && o.activity ? ` (${o.activity})` : ''}. Gate locked for ${Math.ceil((state.escalatedUntil - Date.now()) / 60000)} more min.`;
-        } else if (f.onitry && o && o.running) {
-          status.classList.add(o.status === 'off_task' ? 'bad' : 'good');
-          status.textContent = o.status === 'off_task' ? `Onitry: off task — ${o.activity || 'get back to it'}` : `Onitry is watching${o.activity ? ` — ${o.activity}` : ''}`;
-        } else if (f.onitryError) {
-          status.classList.add('warn');
-          status.textContent = `Onitry: ${f.onitryError}`;
-        }
-      }
-      const actions = el('div', 'now-actions');
-      const done = el('button', 'btn primary', 'Done');
-      done.prepend(icon('check'));
-      done.addEventListener('click', () => send({ type: 'plan:focus', action: 'stop', outcome: 'done' }));
-      const more = el('button', 'btn', '+10 min');
-      more.addEventListener('click', () => send({ type: 'plan:focus', action: 'extend', minutes: 10 }));
-      const stop = el('button', 'btn ghost', 'Stop');
-      stop.addEventListener('click', () => send({ type: 'plan:focus', action: 'stop', outcome: 'stopped' }));
-      actions.append(done, more, stop);
-      card.append(top, title, timer, bar, status, actions);
+      const actions = el('div', 'nb-actions');
+      if (f.pausedAt) actions.append(actionBtn('Resume', 'play', 'primary', () => send({ type: 'plan:focus', action: 'resume' })));
+      else actions.append(actionBtn('Pause', 'pause', '', () => send({ type: 'plan:focus', action: 'pause' }), 'Pause the timer (and Onitry)'));
+      if (f.kind !== 'break') actions.append(actionBtn('Done', 'check', f.pausedAt ? '' : 'primary', () => send({ type: 'plan:focus', action: 'done' }), state.settings.autoAdvance ? 'Done — start the next block' : 'Done'));
+      else actions.append(actionBtn('End break', 'check', 'primary', () => send({ type: 'plan:focus', action: 'done' })));
+      actions.append(actionBtn('+10', null, 'ghost', () => send({ type: 'plan:focus', action: 'extend', minutes: 10 }), 'Add 10 minutes'));
+      if (f.kind !== 'break') actions.append(actionBtn('Skip', null, 'ghost', () => send({ type: 'plan:focus', action: 'skip' }), 'Move this to the end of today and start the next block'));
+      actions.append(actionBtn('Stop', null, 'ghost', () => send({ type: 'plan:focus', action: 'stop', outcome: 'stopped' }), 'End this block and stop the schedule'));
+      const progress = el('div', 'nb-progress');
+      progress.id = 'focusBar';
+      progress.append(el('span'));
+      bar.append(info, timer, actions, progress);
+      const line = onitryLine(f);
+      if (line) bar.append(line);
+      const then = P.nextUp(events, nowMin);
+      if (then) bar.append(el('div', 'nb-then', `${state.settings.autoAdvance ? 'Then' : 'Next'}: ${then.task.title} · ${P.hhmm(then.start)}`));
       tickTimer();
       return;
     }
 
-    const open = P.todayTasks(state.tasks, today()).filter((t) => !t.done);
-    const next = open[0];
-    const ask = el('div', 'now-ask', 'What are you doing right now?');
-    const row = el('div', 'now-start');
-    const input = el('input', 'now-input');
-    input.placeholder = next ? next.title : 'e.g. Physics FRQs';
-    input.spellcheck = false;
-    const mins = el('select', 'select now-mins');
-    for (const m of [15, 25, 40, 60, 90]) {
-      const o = el('option', null, `${m} min`);
-      o.value = m;
-      mins.append(o);
+    const next = P.nextUp(events, nowMin);
+    bar.classList.add('idle');
+    if (next) {
+      const info = el('div', 'nb-info');
+      const top = el('div', 'nb-top');
+      top.append(el('span', 'nb-label', next.start - nowMin > 10 ? `Next at ${P.hhmm(next.start)}` : 'Up next'));
+      const chip = courseChip(next.task.course);
+      if (chip) top.append(chip);
+      info.append(top, el('div', 'nb-title', next.task.title));
+      const left = events.filter((e) => e.type === 'task').length;
+      const actions = el('div', 'nb-actions');
+      actions.append(actionBtn(left > 1 ? `Start (${left} blocks)` : 'Start', 'play', 'primary', () => startTask(next.task), state.settings.autoAdvance ? 'Runs your schedule back to back' : ''));
+      bar.append(info, actions);
+    } else {
+      bar.append(el('div', 'nb-empty', 'Nothing scheduled. Add something above — it goes straight onto your schedule.'));
     }
-    mins.value = String(next && next.estimate && [15, 25, 40, 60, 90].includes(next.estimate) ? next.estimate : state.settings.focusMinutes);
-    if (![...mins.options].some((o) => o.selected)) mins.value = '40';
-    const go = el('button', 'btn primary', 'Start focus');
-    go.prepend(icon('sparkle'));
-    const start = () => {
-      const typed = input.value.trim();
-      if (typed) {
-        const parsed = P.parseQuick(typed, qopts());
-        startFocus({ title: parsed.title, course: parsed.course }, Number(mins.value), true);
-      } else if (next) startFocus(next, Number(mins.value));
-      else input.focus();
-    };
-    go.addEventListener('click', start);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') start();
-    });
-    row.append(input, mins, go);
-    card.append(ask, row);
-
     const g = P.guardState(state.settings, null, state.tasks);
-    const hint = el('div', 'now-hint');
-    if (g.active && g.urgent) hint.textContent = `🛡 Distraction gate is up — ${g.urgent} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`;
-    else if (g.active) hint.textContent = '🛡 Distraction gate is up.';
-    else if (!open.length) hint.textContent = 'Nothing on today’s list. Add something above, or pick from “nothing to do”.';
-    else hint.textContent = `Next up: ${next.title}${next.estimate ? ` (${P.fmtMinutes(next.estimate)})` : ''}`;
-    card.append(hint);
+    if (g.active) bar.append(el('div', 'nb-hint', `🛡 Gate is up — ${g.urgent || 'some'} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`));
   }
 
   function tickTimer() {
     const f = state.focus;
     const t = $('#focusTimer');
     if (!f || !t) return;
-    const left = f.endsAt - Date.now();
+    const now = f.pausedAt || Date.now();
+    const left = f.endsAt - now;
     const over = left < 0;
     const s = Math.abs(Math.round(left / 1000));
     const mm = Math.floor(s / 60);
     const ss = String(s % 60).padStart(2, '0');
     t.textContent = `${over ? '+' : ''}${mm}:${ss}`;
     t.classList.toggle('over', over);
-    const total = f.endsAt - f.startedAt;
-    const pct = Math.min(100, ((Date.now() - f.startedAt) / total) * 100);
+    t.classList.toggle('paused', !!f.pausedAt);
+    const total = f.endsAt - f.startedAt - (f.pausedMs || 0);
+    const pct = Math.min(100, ((now - f.startedAt - (f.pausedMs || 0)) / Math.max(1, total)) * 100);
     const bar = $('#focusBar span');
     if (bar) {
       bar.style.width = `${pct}%`;
       bar.parentElement.classList.toggle('over', over);
     }
-    document.title = `${over ? '+' : ''}${mm}:${ss} · ${f.title}`;
+    document.title = `${f.pausedAt ? '❚❚ ' : ''}${over ? '+' : ''}${mm}:${ss} · ${f.title}`;
+    // Keep the running block on the calendar growing with the clock.
+    const ev = $('.ev-focus');
+    if (ev && over) ev.style.height = `${Math.max(22, (nowMinutes() - Number(ev.dataset.start)) * PX - 2)}px`;
   }
 
-  async function startFocus(task, minutes, adHoc = false) {
-    let taskId = task.id || null;
-    if (adHoc && !taskId) {
-      // Typed something new: put it on today's list so it's tracked.
-      const t = P.makeTask({ title: task.title, course: task.course, plan: today(), estimate: minutes });
-      await P.addTasks([t]);
-      taskId = t.id;
-    }
-    await send({ type: 'plan:focus', action: 'start', taskId, title: task.title, course: task.course || null, minutes });
+  function startTask(t) {
+    return send({ type: 'plan:focus', action: 'start', taskId: t.id, title: t.title, course: t.course || null, minutes: P.taskMinutes(t, state.settings.focusMinutes), kind: t.kind === 'break' ? 'break' : 'focus' });
   }
 
   // ---------- quick add ----------
@@ -319,6 +320,13 @@
     else if (r.due) box.append(el('span', `pv ${r.kind === 'test' ? 'test' : ''}`, `${r.kind === 'test' ? 'test' : 'due'} ${P.relDay(r.due)}`));
     else box.append(el('span', 'pv', 'today'));
     if (r.estimate) box.append(el('span', 'pv', P.fmtMinutes(r.estimate)));
+    if (r.kind === 'break') box.append(el('span', 'pv', 'break'));
+    // Where it lands on today's schedule.
+    if (r.plan === today() && !r.someday) {
+      const probe = P.makeTask({ ...r, id: '__probe', order: Date.now() + 1e6 });
+      const ev = P.layoutDay({ tasks: state.tasks.concat(probe), focus: state.focus, sessions: [], settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes }).find((e) => e.task && e.task.id === '__probe');
+      if (ev) box.append(el('span', 'pv slot', `→ ${P.hhmm(ev.start)}–${P.hhmm(ev.end)}${r.at ? ' 📌' : ''}`));
+    }
   }
   quick.addEventListener('input', previewQuick);
   quick.addEventListener('keydown', async (e) => {
@@ -384,7 +392,7 @@
       const play = el('button', 'icon-btn small play', null);
       play.title = 'Start a focus block on this';
       play.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-      play.addEventListener('click', () => startFocus(t, t.estimate || state.settings.focusMinutes));
+      play.addEventListener('click', () => startTask(t));
       li.append(play);
     }
     return li;
@@ -392,7 +400,7 @@
 
   async function toggleDone(t, done) {
     if (done && state.focus && state.focus.taskId === t.id) {
-      await send({ type: 'plan:focus', action: 'stop', outcome: 'done' });
+      await send({ type: 'plan:focus', action: 'done' });
       return;
     }
     await P.updateTask(t.id, { done: done ? Date.now() : null });
@@ -402,39 +410,76 @@
     }
   }
 
+  // ---------- today: the schedule ----------
+
+  const PX = 1.1; // pixels per minute (66px an hour)
+  const SNAP = 5;
+  let layoutCache = [];
+  let scrolledToNow = false;
+
+  function computeLayout() {
+    layoutCache = P.layoutDay({ tasks: state.tasks, focus: state.focus, sessions: state.sessions, settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes });
+    return layoutCache;
+  }
+
+  const hm24 = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(Math.round(min) % 60).padStart(2, '0')}`;
+  const snap = (min) => Math.round(min / SNAP) * SNAP;
+
   function renderToday() {
+    const events = computeLayout();
+    // Classes get their own rail; everything else shares lanes only with itself.
+    P.assignLanes(events.filter((e) => e.type !== 'class'));
+    const nowMin = nowMinutes();
     const list = P.todayTasks(state.tasks, today());
-    const open = list.filter((t) => !t.done);
     const done = list.filter((t) => t.done);
-    const ol = $('#todayList');
-    ol.textContent = '';
+    const tasksAhead = events.filter((e) => e.type === 'task');
 
-    // Lay the evening out end to end from now (or from when the focus block ends).
-    const now = new Date();
-    let startMin = now.getHours() * 60 + now.getMinutes();
-    if (state.focus) startMin = Math.max(startMin, Math.round((state.focus.endsAt - new Date().setHours(0, 0, 0, 0)) / 60000));
-    // Homework time starts after the last class (free blocks count as class here).
-    const info = P.dayInfo(today(), state.settings.blocks);
-    if (info.blocks.length) startMin = Math.max(startMin, P.minutesOfDay(info.blocks[info.blocks.length - 1].end));
-    renderBlocks(info, now);
-    const queue = open.filter((t) => !(state.focus && state.focus.taskId === t.id));
-    const slots = new Map(P.schedule(queue, startMin, 30).map((s) => [s.task.id, s]));
-    for (const t of open) ol.append(taskRow(t, { slot: slots.get(t.id), draggable: true }));
-    if (!open.length) ol.append(el('li', 'empty', done.length ? 'All done for today. 🎉 Pick something from “nothing to do”, or rest.' : 'Nothing planned yet. Type above — one task per line works too.'));
+    // Visible range: the whole day's events plus a bit of room around now.
+    const starts = events.map((e) => e.start).concat(nowMin - 60);
+    const ends = events.map((e) => e.end).concat(nowMin + 180);
+    const startH = Math.max(0, Math.floor(Math.min(...starts) / 60));
+    const endH = Math.min(24, Math.ceil(Math.max(...ends) / 60 + 0.5));
+    const top = (min) => (min - startH * 60) * PX;
 
-    const total = queue.reduce((sum, t) => sum + (t.estimate || 30), 0);
+    const cal = $('#cal');
+    const inner = $('#calInner');
+    inner.textContent = '';
+    inner.style.height = `${(endH - startH) * 60 * PX}px`;
+    inner.dataset.start = String(startH * 60);
+    inner.classList.toggle('has-classes', events.some((e) => e.type === 'class'));
+    for (let h = startH; h <= endH; h++) {
+      const line = el('div', 'cal-hour');
+      line.style.top = `${top(h * 60)}px`;
+      if (h < endH) line.append(el('span', null, P.hhmm(h * 60).replace(':00', '')));
+      inner.append(line);
+    }
+
+    for (const ev of events) inner.append(eventEl(ev, top, nowMin, tasksAhead[0]));
+
+    if (nowMin >= startH * 60 && nowMin <= endH * 60) {
+      const line = el('div', 'cal-now');
+      line.style.top = `${top(nowMin)}px`;
+      inner.append(line);
+    }
+    if (!scrolledToNow && cal.clientHeight) {
+      cal.scrollTop = Math.max(0, top(nowMin) - cal.clientHeight * 0.25);
+      scrolledToNow = true;
+    }
+
+    // Footer: how long the plan runs.
     const foot = $('#todayFoot');
     foot.textContent = '';
-    if (queue.length) {
-      const endMin = startMin + total;
-      const workEnd = P.minutesOfDay(now.getDay() % 6 === 0 ? state.settings.weekendEnd : state.settings.workEnd);
-      const line = el('span', null, `${P.fmtMinutes(total)} planned · done by ~${P.hhmm(endMin)}`);
-      foot.append(line);
+    foot.classList.remove('warn');
+    if (tasksAhead.length) {
+      const total = tasksAhead.reduce((sum, e) => sum + (e.end - e.start), 0);
+      const endMin = Math.max(...tasksAhead.map((e) => e.end));
+      const workEnd = P.minutesOfDay(new Date().getDay() % 6 === 0 ? state.settings.weekendEnd : state.settings.workEnd);
+      foot.append(el('span', null, `${tasksAhead.length} block${tasksAhead.length === 1 ? '' : 's'} · ${P.fmtMinutes(total)} · done by ${P.hhmm(endMin)}`));
       if (endMin > workEnd) {
         foot.classList.add('warn');
         foot.append(el('span', 'over', ' — past your cutoff. Cut or move something.'));
-      } else foot.classList.remove('warn');
-    }
+      }
+    } else foot.append(el('span', null, done.length ? 'All done for today. 🎉' : 'Type above to add blocks. Click an empty spot on the calendar to add one at that time.'));
 
     $('#todayMeta').textContent = list.length ? `${done.length}/${list.length} done` : '';
     const doneBox = $('#doneToday');
@@ -443,6 +488,8 @@
     const dl = $('#doneList');
     dl.textContent = '';
     for (const t of done) dl.append(taskRow(t));
+
+    renderBlocks();
 
     // Heads-up: tests in the next 3 days and anything overdue.
     const hu = $('#headsUp');
@@ -461,66 +508,169 @@
     }
   }
 
-  function renderBlocks(info, now) {
+  function courseFor(label) {
+    const l = String(label || '').toLowerCase();
+    return state.settings.courses.find((c) => c.name.toLowerCase() === l || (c.aliases || []).includes(l));
+  }
+
+  function eventEl(ev, top, nowMin, firstAhead) {
+    const len = ev.end - ev.start;
+    const node = el('div', `ev ev-${ev.type}`);
+    node.style.top = `${top(ev.start)}px`;
+    node.style.height = `${Math.max(20, len * PX - 2)}px`;
+    node.style.setProperty('--lane', ev.lane || 0);
+    node.style.setProperty('--lanes', ev.lanes || 1);
+    node.dataset.start = String(ev.start);
+    if (len * PX < 44) node.classList.add('short');
+    const time = el('span', 'ev-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}`);
+
+    if (ev.type === 'class') {
+      const c = courseFor(ev.block.label);
+      if (c) node.style.setProperty('--c', c.color);
+      node.classList.toggle('free', ev.free);
+      node.classList.toggle('past', ev.end <= nowMin);
+      node.append(el('span', 'ev-title', ev.block.label), time);
+      node.title = `${ev.block.label} · ${ev.block.start}–${ev.block.end}${ev.free ? ' · free block: tasks can go here' : ''}`;
+      node.addEventListener('click', () => openBlocksEditor());
+      return node;
+    }
+    if (ev.type === 'session') {
+      const s = ev.session;
+      if (s.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, s.course));
+      node.classList.toggle('break', s.kind === 'break');
+      const mark = s.outcome === 'done' ? '✓ ' : '';
+      node.append(el('span', 'ev-title', `${mark}${s.title}`), el('span', 'ev-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}${s.onitry && s.onitry.onPct != null ? ` · ${s.onitry.onPct}% on task` : ''}`));
+      node.title = `${s.title} — ${s.outcome}, ${P.fmtMinutes(s.minutes)}`;
+      return node;
+    }
+    if (ev.type === 'focus') {
+      const f = ev.focus;
+      if (f.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, f.course));
+      node.classList.toggle('break', f.kind === 'break');
+      node.classList.toggle('paused', !!f.pausedAt);
+      node.append(el('span', 'ev-title', f.title), el('span', 'ev-time', f.pausedAt ? 'Paused' : `Now · until ${P.hhmm(ev.end)}`));
+      return node;
+    }
+
+    // A task block: draggable to pin a time, resizable to change its length.
+    const t = ev.task;
+    node.dataset.id = t.id;
+    if (t.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, t.course));
+    node.classList.toggle('break', t.kind === 'break');
+    node.classList.toggle('pinned', !!ev.pinned);
+    node.classList.toggle('late', !!(t.due && t.due < today()));
+    node.classList.toggle('next', ev === firstAhead && !state.focus);
+    const head = el('div', 'ev-head');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.title = 'Mark done';
+    box.addEventListener('change', () => toggleDone(t, box.checked));
+    const title = el('button', 'ev-title', t.title);
+    title.type = 'button';
+    title.title = 'Edit';
+    title.addEventListener('click', () => openEdit(t.id));
+    head.append(box, title);
+    const tools = el('div', 'ev-tools');
+    if (ev.pinned) {
+      const pin = el('button', 'ev-pin', '📌');
+      pin.type = 'button';
+      pin.title = `Pinned at ${P.hhmm(ev.start)}. Click to let it flow with the rest.`;
+      pin.addEventListener('click', () => P.updateTask(t.id, { at: null }));
+      tools.append(pin);
+    }
+    const play = el('button', 'ev-play');
+    play.type = 'button';
+    play.title = t.kind === 'break' ? 'Start this break' : 'Start this block';
+    play.innerHTML = InkIcons.svg('play', 14);
+    play.addEventListener('click', () => startTask(t));
+    tools.append(play);
+    head.append(tools);
+    const meta = el('div', 'ev-meta');
+    meta.append(time, el('span', 'ev-len', P.fmtMinutes(len)));
+    const due = dueLabel(t);
+    if (due && !node.classList.contains('short')) meta.append(due);
+    node.title = `${t.title} · ${P.hhmm(ev.start)}–${P.hhmm(ev.end)} (${P.fmtMinutes(len)})${ev.pinned ? ' · pinned' : ''}\nDrag to move, drag the bottom edge to resize`;
+    const grip = el('div', 'ev-resize');
+    grip.title = 'Drag to change how long';
+    node.append(head, meta, grip);
+    node.addEventListener('pointerdown', (e) => startDrag(e, node, ev));
+    return node;
+  }
+
+  // Drag a block to pin it at a time (5-minute snaps); drag its bottom edge to resize.
+  function startDrag(e, node, ev) {
+    if (e.button !== 0 || e.target.closest('input, .ev-tools')) return;
+    const resizing = e.target.classList.contains('ev-resize');
+    const y0 = e.clientY;
+    const len0 = ev.end - ev.start;
+    let moved = false;
+    let value = null;
+    const label = node.querySelector('.ev-time');
+    const onMove = (m) => {
+      const dy = m.clientY - y0;
+      if (!moved && Math.abs(dy) < 4) return;
+      if (!moved) {
+        moved = true;
+        node.classList.add(resizing ? 'resizing' : 'dragging');
+        node.setPointerCapture(e.pointerId);
+      }
+      if (resizing) {
+        value = Math.max(SNAP, snap(len0 + dy / PX));
+        node.style.height = `${Math.max(20, value * PX - 2)}px`;
+        label.textContent = `${P.hhmm(ev.start)}–${P.hhmm(ev.start + value)}`;
+      } else {
+        value = Math.max(0, Math.min(24 * 60 - len0, snap(ev.start + dy / PX)));
+        node.style.transform = `translateY(${(value - ev.start) * PX}px)`;
+        label.textContent = `${P.hhmm(value)}–${P.hhmm(value + len0)}`;
+      }
+    };
+    const onUp = async () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!moved) return;
+      // A drag that started on the title shouldn't also count as a click (which opens edit).
+      const eat = (c) => {
+        c.stopPropagation();
+        c.preventDefault();
+      };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 0);
+      if (value == null) return;
+      if (resizing) await P.updateTask(ev.task.id, { estimate: value });
+      else {
+        await P.updateTask(ev.task.id, { at: hm24(value), plan: today() });
+        toast(`Pinned “${ev.task.title}” at ${P.hhmm(value)}`, { action: 'Undo', onAction: () => P.updateTask(ev.task.id, { at: ev.pinned ? ev.task.at : null }) });
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // Click an empty spot: start a quick add pinned at that time.
+  $('#calInner').addEventListener('click', (e) => {
+    if (e.target !== e.currentTarget && !e.target.classList.contains('cal-hour')) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const min = snap(Number(e.currentTarget.dataset.start) + (e.clientY - r.top) / PX);
+    quick.value = ` at ${hm24(min)}`;
+    quick.focus();
+    quick.setSelectionRange(0, 0);
+    previewQuick();
+    quick.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+
+  function renderBlocks() {
     const strip = $('#blockStrip');
     strip.textContent = '';
     const b = state.settings.blocks;
-    if (!b.enabled) return;
-    if (!info.blocks.length) {
-      const hasAny = Object.values(b.schedule || {}).some((l) => l && l.length);
-      const onBreak = b.skip.includes(today());
-      if (onBreak || !hasAny) {
-        const setup = el('button', 'blk-setup', onBreak ? '🏖 No school today. The rotation is paused.' : '+ Add your class blocks');
-        setup.type = 'button';
-        strip.append(setup);
-      }
-      return;
-    }
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const { current } = P.blockAt(info.blocks, nowMin);
-    for (const b of info.blocks) {
-      const past = P.minutesOfDay(b.end) <= nowMin;
-      const cls = ['blk'];
-      if (b === current) cls.push('now');
-      if (past) cls.push('past');
-      if (P.isFreeBlock(b)) cls.push('free');
-      const item = el('div', cls.join(' '));
-      const course = state.settings.courses.find((c) => c.name.toLowerCase() === b.label.toLowerCase() || (c.aliases || []).includes(b.label.toLowerCase()));
-      if (course) item.style.setProperty('--c', course.color);
-      item.append(el('span', 'blk-time', P.hhmm(P.minutesOfDay(b.start))), el('span', 'blk-label', b.label));
-      item.title = `${b.start}–${b.end} ${b.label}`;
-      strip.append(item);
+    if (!b.enabled || P.dayInfo(today(), b).blocks.length) return;
+    const hasAny = Object.values(b.schedule || {}).some((l) => l && l.length);
+    const onBreak = b.skip.includes(today());
+    if (onBreak || !hasAny) {
+      const setup = el('button', 'blk-setup', onBreak ? '🏖 No school today. The rotation is paused.' : '+ Add your class blocks');
+      setup.type = 'button';
+      strip.append(setup);
     }
   }
-
-  // Drag to reorder today's list.
-  let dragId = null;
-  $('#todayList').addEventListener('dragstart', (e) => {
-    const li = e.target.closest('li.task');
-    if (!li) return;
-    dragId = li.dataset.id;
-    li.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-  $('#todayList').addEventListener('dragend', (e) => {
-    e.target.closest('li.task')?.classList.remove('dragging');
-  });
-  $('#todayList').addEventListener('dragover', (e) => {
-    if (!dragId) return;
-    e.preventDefault();
-    const over = e.target.closest('li.task');
-    const dragging = $('#todayList li.dragging');
-    if (!over || !dragging || over === dragging) return;
-    const r = over.getBoundingClientRect();
-    over.parentNode.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
-  });
-  $('#todayList').addEventListener('drop', async (e) => {
-    e.preventDefault();
-    const ids = $$('#todayList li.task').map((li) => li.dataset.id);
-    dragId = null;
-    const base = Date.now();
-    await P.store.update(K.tasks, [], (all) => all.map((t) => (ids.includes(t.id) ? { ...t, order: base + ids.indexOf(t.id) } : t)));
-  });
 
   // ---------- week ----------
 
@@ -624,7 +774,7 @@
   function dayStats(k) {
     const start = P.fromKey(k).getTime();
     const end = start + P.DAY;
-    const sessions = state.sessions.filter((s) => s.end >= start && s.end < end);
+    const sessions = state.sessions.filter((s) => s.end >= start && s.end < end && s.kind !== 'break');
     const focusMin = sessions.reduce((sum, s) => sum + s.minutes, 0);
     const withOnitry = sessions.filter((s) => s.onitry && s.onitry.onPct != null);
     const onPct = withOnitry.length ? Math.round(withOnitry.reduce((sum, s) => sum + s.onitry.onPct * s.minutes, 0) / Math.max(1, withOnitry.reduce((sum, s) => sum + s.minutes, 0))) : null;
@@ -1206,6 +1356,7 @@
     for (const k of ['workStart', 'workEnd', 'weekendStart', 'weekendEnd', 'planTime', 'eodTime']) f[k].value = s[k];
     f.checkinMinutes.value = s.checkinMinutes;
     f.focusMinutes.value = s.focusMinutes;
+    f.autoAdvance.checked = s.autoAdvance;
     f.onitryEnabled.checked = s.onitry.enabled;
     f.onitryCode.value = s.onitry.code;
     f.onitryAutoStart.checked = s.onitry.autoStart;
@@ -1300,6 +1451,7 @@
       eodTime: f.eodTime.value,
       checkinMinutes: Number(f.checkinMinutes.value) || 0,
       focusMinutes: Number(f.focusMinutes.value) || 40,
+      autoAdvance: f.autoAdvance.checked,
       courses: courses.length ? courses : P.DEFAULT_COURSES,
       placement: f.placement.value || 'panel',
       theme: f.theme.value,
@@ -1359,7 +1511,7 @@
     if (!state.settings.onitry.enabled || document.hidden) return;
     state.onitry = { ...(await OnitryBridge.status(state.settings.onitry)), at: Date.now() };
     renderOnitryChip();
-    if (state.focus) renderNow();
+    renderNow();
   }
 
   // ---------- navigation ----------
@@ -1399,7 +1551,10 @@
     setInterval(renderClock, 15000);
     setInterval(() => {
       // Keep the schedule times and "past cutoff" warnings fresh.
-      if (!document.hidden) renderToday();
+      if (!document.hidden) {
+        renderToday();
+        renderNow();
+      }
     }, 60000);
     pollOnitry();
     setInterval(pollOnitry, 5000);

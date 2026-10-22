@@ -23,16 +23,17 @@
       </div>
     </header>
 
-    <section class="now-card" id="nowCard" aria-live="polite"></section>
 
     <section class="add-card">
       <span class="add-icon" data-icon="plus"></span>
-      <textarea id="quickAdd" rows="1" spellcheck="false" placeholder="Add anything… “calc hw due thu 40m”, “econ test fri”, “~ cad the claw”"></textarea>
+      <textarea id="quickAdd" rows="1" spellcheck="false" placeholder="Add to your schedule… “econ practice 30m”, “break 10m”, “mun call at 4pm”"></textarea>
       <div class="add-preview" id="quickPreview"></div>
     </section>
 
+    <section class="now-bar" id="nowBar" aria-live="polite"></section>
+
     <nav class="t-tabs" id="tabs" role="tablist">
-      <button data-tab="today" class="on">Today</button>
+      <button data-tab="today" class="on">Schedule</button>
       <button data-tab="week">Week</button>
       <button data-tab="someday">Free time</button>
       <button data-tab="journal">Journal</button>
@@ -41,12 +42,12 @@
     <main class="t-grid">
       <section class="t-col card" data-col="today">
         <div class="col-head">
-          <h2>Today</h2>
+          <h2>Schedule</h2>
           <span class="col-meta" id="todayMeta"></span>
         </div>
         <div class="blocks" id="blockStrip"></div>
         <div class="heads-up" id="headsUp"></div>
-        <ol class="task-list" id="todayList"></ol>
+        <div class="cal" id="cal"><div class="cal-inner" id="calInner"></div></div>
         <div class="list-foot" id="todayFoot"></div>
         <details class="done-today" id="doneToday">
           <summary></summary>
@@ -185,8 +186,9 @@
       </div>
       <div class="row2">
         <label>Check-in when idle every (min, 0 = off)<input type="number" name="checkinMinutes" min="0" max="240"></label>
-        <label>Default focus block (min)<input type="number" name="focusMinutes" min="5" max="240" step="5"></label>
+        <label>Default block length (min)<input type="number" name="focusMinutes" min="5" max="240" step="5"></label>
       </div>
+      <label class="check"><input type="checkbox" name="autoAdvance"> Run my schedule back to back: when a block ends, start the next one</label>
       <div class="row2">
         <label>“Plan your afternoon” reminder<input type="time" name="planTime"></label>
         <label>End-of-day check-in<input type="time" name="eodTime"></label>

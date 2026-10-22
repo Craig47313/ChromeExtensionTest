@@ -9,21 +9,25 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 ## What it does
 
 **Plan**
-- **Quick add** understands plain language: `calc hw due tmrw 40m`, `econ test fri`, `chem summative 10/16`, `~ cad the claw` (the `~` sends it to the free-time list). Paste several lines to add several tasks.
+- **Quick add** goes straight onto the schedule and understands plain language: `econ practice 30m`, `break 10m`, `mun call at 4pm`, `calc hw due tmrw 40m`, `econ test fri`, `~ cad the claw` (the `~` sends it to the free-time list). The preview shows where it will land before you press Enter. Paste several lines to add several blocks.
 - **Block days:**
   - Your A/B/C/D rotation shows next to the date and on the week view.
   - A **class blocks menu** (⚙ → Block days → Edit class blocks, or click the letter): one tab per day type, start/end/class rows that fill in their own times, copy one day to another, and breaks as date ranges.
-  - Today's classes appear as a strip at the top of the Today list, with the current block highlighted.
+  - Today's classes show in their own rail on the schedule.
   - Quick add understands `due next B`, `physics test D day` and `next a day`.
   - Holidays pause the rotation.
-- **Today list:**
+- **Schedule:** today as a calendar day view, like Google Calendar.
   - It holds what's due, what's overdue, and what you planned, with test reminders two days out.
-  - Tasks are laid end to end starting after your last class, so you can see when you'll be done.
+  - Blocks run back to back from now, in order, flowing around classes (free blocks count as usable time) and anything you pinned.
+  - Drag a block to pin it at a time, drag its bottom edge to resize it, click an empty spot to add something there.
+  - Today's finished blocks stay on it, faded, and a red line marks now.
   - It warns you when the plan runs past your cutoff.
 - **Free time list:** projects to pick from when there's "nothing" to do.
 
 **Focus**
-- **Focus blocks** with a timer, Done and +10 min. The toolbar badge counts down.
+- **Focus blocks in succession:** press Start and the schedule runs itself; when a block ends, the next one starts (and you're asked if you finished). The bar above the schedule has **Pause / Resume**, Done, +10, Skip and Stop. Pausing also pauses Onitry and slides the rest of the day later.
+- **Break blocks** (`break`, `snack`, `dinner`, `walk`…) loosen the gate, pause Onitry and tick themselves off.
+- The toolbar badge counts down (`❚❚` while paused).
 - **Distraction gate:** YouTube, Reddit and other sites redirect to a page that shows what's due. To get through, you write a reason (it's logged to your journal) and wait. The wait grows each time you come back. During a focus block you also have to type out a sentence, and passes are capped at 5 minutes.
 - **When the gate is up:**
 

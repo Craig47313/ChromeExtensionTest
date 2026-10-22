@@ -37,6 +37,9 @@
     status: (cfg) => call(cfg, 'GET', '/v1/status'),
     startTask: (cfg, task, details = '') => call(cfg, 'POST', '/v1/task', { task, details }),
     stop: (cfg) => call(cfg, 'POST', '/v1/stop', {}),
+    // Older Onitry builds answer 404 here; callers treat that as "no pause support".
+    pause: (cfg, minutes) => call(cfg, 'POST', '/v1/pause', { minutes: Math.max(1, Math.min(240, Math.round(minutes))) }),
+    resume: (cfg) => call(cfg, 'POST', '/v1/resume', {}),
     // One Claude call on Onitry's side, so allow it time.
     review: (cfg, stats) => call(cfg, 'POST', '/v1/review', { stats }, 120000),
     // Starts the Onitry app through its native-messaging host

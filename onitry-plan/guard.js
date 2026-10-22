@@ -16,7 +16,8 @@
   InkPalettes.apply(document.documentElement, settings.palette || InkPalettes.DEFAULT, dark);
 
   const [focus, tasks, journal, meta] = await Promise.all([P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.journal, {}), P.store.get(K.meta, {})]);
-  const escalated = !!focus && (meta.escalatedUntil || 0) > Date.now();
+  const focusing = P.isFocusing(focus);
+  const escalated = focusing && (meta.escalatedUntil || 0) > Date.now();
   const today = P.dateKey();
   const passesToday = (journal[today] || []).filter((e) => e.kind === 'pass');
   const siteVisits = passesToday.filter((e) => e.text.startsWith(site)).length;
@@ -24,7 +25,7 @@
   $('#site').textContent = site;
   document.title = `Hold up · ${site}`;
 
-  if (focus) {
+  if (focusing) {
     $('#headline').textContent = escalated ? 'Onitry saw that.' : 'Not now.';
     $('#why').textContent = escalated
       ? `You drifted off task during your focus block, so ${site} is locked for ${Math.ceil((meta.escalatedUntil - Date.now()) / 60000)} more minutes. No passes.`
@@ -87,7 +88,7 @@
 
   // ---------- the pass ----------
 
-  const strict = !!focus;
+  const strict = focusing;
   const maxMinutes = strict ? 5 : 60;
   const options = strict ? [2, 5] : [5, 10, 20];
   let minutes = strict ? 5 : Math.min(settings.passMinutes, maxMinutes);

@@ -235,14 +235,29 @@
 
   // ---------- quick add ----------
 
+  const BREAK_WORDS = /^(break|rest|snack|nap|walk|dinner|lunch|shower|stretch)\b/i;
   const TEST_WORDS = /\b(test|quiz|exam|summative|midterm|final|assessment|ils|psat|sat)\b/i;
   const DATE_PREPS = new Set(['due', 'on', 'by', 'for', 'before', 'this']);
 
   // Parse one line like "calc hw due thu 40m" or "econ test fri" or "~ cad the claw".
   function parseQuick(input, { courses = DEFAULT_COURSES, today = dateKey(), blocks = null } = {}) {
     let text = String(input || '').trim();
-    const out = { title: '', course: null, kind: 'todo', due: null, plan: null, estimate: null, someday: false };
+    const out = { title: '', course: null, kind: 'todo', due: null, plan: null, estimate: null, someday: false, at: null };
     if (!text) return out;
+
+    // Time of day pins it on the schedule: "at 4pm", "at 16:30", "@ 4:15". A bare
+    // 1–6 with no am/pm means afternoon (after school).
+    text = text.replace(/(?:^|\s)(?:at|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?=[\s.,;!?]|$)/i, (m, h, mm, ap) => {
+      let hour = Number(h);
+      const min = mm ? Number(mm) : 0;
+      if (hour > 23 || min > 59) return m;
+      if (ap) {
+        if (/pm/i.test(ap) && hour < 12) hour += 12;
+        if (/am/i.test(ap) && hour === 12) hour = 0;
+      } else if (hour >= 1 && hour <= 6) hour += 12;
+      out.at = `${pad(hour)}:${pad(min)}`;
+      return ' ';
+    });
 
     // Block days: "due next B", "next c day", "test D day", "on A-day". A bare
     // letter only counts after "next" or as a capital before "day", so the
@@ -334,9 +349,13 @@
     }
     out.title = titleWords.join(' ').replace(/\s+/g, ' ').trim() || String(input).trim();
 
-    if (TEST_WORDS.test(out.title)) out.kind = 'test';
+    if (BREAK_WORDS.test(out.title) && !out.someday) {
+      out.kind = 'break';
+      if (!out.estimate) out.estimate = 10;
+    } else if (TEST_WORDS.test(out.title)) out.kind = 'test';
     else if (out.due) out.kind = 'due';
     if (!out.due && !out.someday) out.plan = today; // undated things are for today
+    if (out.at && out.due && !out.someday) out.plan = out.due; // "tmrw at 4pm" → on tomorrow's schedule
     return out;
   }
 
@@ -414,6 +433,107 @@
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  // ---------- the day as a calendar ----------
+  // Fixed things (classes, pinned tasks, the running block) keep their times;
+  // everything else on today's list runs back to back from now, flowing around
+  // them in list order. Minutes are minutes since midnight.
+
+  const taskMinutes = (t, def = 30) => t.estimate || def;
+
+  function focusEndsAt(focus, now = Date.now()) {
+    return focus.pausedAt ? focus.endsAt + (now - focus.pausedAt) : focus.endsAt;
+  }
+
+  function layoutDay({ tasks = [], focus = null, sessions = [], settings = DEFAULT_SETTINGS, today = dateKey(), now = new Date(), defaultMinutes = 30 } = {}) {
+    const dayStart = fromKey(today).getTime();
+    const nowMin = (now.getTime() - dayStart) / 60000;
+    const toMin = (ts) => (ts - dayStart) / 60000;
+    const events = [];
+    const busy = [];
+
+    for (const b of dayInfo(today, settings.blocks || DEFAULT_BLOCKS).blocks) {
+      const ev = { type: 'class', start: minutesOfDay(b.start), end: minutesOfDay(b.end), block: b, free: isFreeBlock(b) };
+      events.push(ev);
+      if (!ev.free) busy.push(ev); // free blocks are time you can use
+    }
+    for (const s of sessions) {
+      if (s.end < dayStart || s.end >= dayStart + DAY) continue;
+      events.push({ type: 'session', start: Math.max(0, toMin(s.start)), end: toMin(s.end), session: s });
+    }
+
+    let cursor = Math.ceil(nowMin);
+    if (focus) {
+      const ev = { type: 'focus', start: Math.max(0, toMin(focus.startedAt)), end: Math.max(toMin(focusEndsAt(focus, now.getTime())), nowMin), focus, task: tasks.find((t) => t.id === focus.taskId) || null };
+      events.push(ev);
+      busy.push(ev);
+      cursor = Math.max(cursor, Math.ceil(ev.end));
+    }
+
+    const open = todayTasks(tasks, today).filter((t) => !t.done && !(focus && focus.taskId === t.id));
+    const flow = [];
+    for (const t of open) {
+      if (t.at && t.plan === today) {
+        const start = minutesOfDay(t.at);
+        const end = start + taskMinutes(t, defaultMinutes);
+        if (end > nowMin) {
+          const ev = { type: 'task', start, end, task: t, pinned: true };
+          events.push(ev);
+          busy.push(ev);
+          continue;
+        }
+      }
+      flow.push(t); // pinned times that already passed rejoin the flow
+    }
+    for (const t of flow) {
+      const len = taskMinutes(t, defaultMinutes);
+      let start = cursor;
+      for (let i = 0; i < 100; i++) {
+        const clash = busy.find((b) => start < b.end && start + len > b.start);
+        if (!clash) break;
+        start = Math.ceil(clash.end);
+      }
+      const ev = { type: 'task', start, end: start + len, task: t, pinned: false };
+      events.push(ev);
+      busy.push(ev);
+      cursor = ev.end;
+    }
+    const rank = { class: 0, session: 1, focus: 2, task: 3 };
+    return events.sort((a, b) => a.start - b.start || rank[a.type] - rank[b.type]);
+  }
+
+  // The first task still ahead of `nowMin` on the laid-out day.
+  function nextUp(events, nowMin) {
+    return events.find((e) => e.type === 'task' && e.end > nowMin) || null;
+  }
+
+  // Side-by-side lanes for overlapping events (like a calendar's day view).
+  function assignLanes(events) {
+    const groups = [];
+    let group = [];
+    let groupEnd = -Infinity;
+    for (const ev of events.slice().sort((a, b) => a.start - b.start)) {
+      if (group.length && ev.start >= groupEnd) {
+        groups.push(group);
+        group = [];
+        groupEnd = -Infinity;
+      }
+      group.push(ev);
+      groupEnd = Math.max(groupEnd, ev.end);
+    }
+    if (group.length) groups.push(group);
+    for (const g of groups) {
+      const laneEnds = [];
+      for (const ev of g) {
+        let lane = laneEnds.findIndex((end) => end <= ev.start);
+        if (lane < 0) lane = laneEnds.push(0) - 1;
+        laneEnds[lane] = ev.end;
+        ev.lane = lane;
+      }
+      for (const ev of g) ev.lanes = laneEnds.length;
+    }
+    return events;
+  }
+
   // ---------- guard (distraction gate) ----------
 
   const DEFAULT_SITES = ['youtube.com', 'reddit.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com', 'netflix.com', 'twitch.tv', 'facebook.com'];
@@ -429,6 +549,7 @@
     planTime: '15:30',
     eodTime: '22:00',
     focusMinutes: 40,
+    autoAdvance: true, // when a block ends, start the next one on the schedule
     passMinutes: 10,
     courses: DEFAULT_COURSES,
     blocks: DEFAULT_BLOCKS,
@@ -463,11 +584,15 @@
 
   // Is the gate up right now, and why? `escalatedUntil`: Onitry caught you off
   // task during a focus block, which raises the gate even in "off" mode.
+  // A paused block or a break block doesn't count as focusing.
+  const isFocusing = (focus) => !!focus && focus.kind !== 'break' && !focus.pausedAt;
+
   function guardState(settings, focus, tasks, now = new Date(), escalatedUntil = 0) {
     const mode = settings.guardMode;
-    if (focus && escalatedUntil > now.getTime()) return { active: true, reason: 'onitry', strict: true };
+    const focusing = isFocusing(focus);
+    if (focusing && escalatedUntil > now.getTime()) return { active: true, reason: 'onitry', strict: true };
     if (mode === 'off') return { active: false, reason: 'off' };
-    if (focus) return { active: true, reason: 'focus', strict: true };
+    if (focusing) return { active: true, reason: 'focus', strict: true };
     if (mode === 'focus') return { active: false, reason: 'no focus block' };
     if (mode === 'always') return { active: true, reason: 'always' };
     const urgent = urgentTasks(tasks, dateKey(now));
@@ -519,7 +644,7 @@
       bySubject[c].missed++;
     }
 
-    const ss = sessions.filter((x) => inWeek(x.end));
+    const ss = sessions.filter((x) => inWeek(x.end) && x.kind !== 'break');
     const focusMin = ss.reduce((a, x) => a + x.minutes, 0);
     const watched = ss.filter((x) => x.onitry && x.onitry.onPct != null);
     const watchedMin = watched.reduce((a, x) => a + x.minutes, 0);
@@ -670,7 +795,8 @@
     dateKey, fromKey, addDays, daysBetween, weekStart, relDay, minutesOfDay, fmtTime, fmtMinutes, hhmm,
     courseIndex, courseColor, parseQuick, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
-    inWorkHours, inFreeBlock, guardState, domainOf, matchSite,
+    inWorkHours, inFreeBlock, guardState, isFocusing,
+    taskMinutes, focusEndsAt, layoutDay, nextUp, assignLanes, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,
     store, getSettings, setSettings, addTasks, updateTask, removeTask, log, ensureSeeded,

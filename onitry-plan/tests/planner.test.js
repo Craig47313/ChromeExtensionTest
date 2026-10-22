@@ -197,3 +197,65 @@ test('breaks expand to dates and collapse back to ranges', () => {
   assert.equal(P.blockLetter('2026-10-20', b), null); // on break
   assert.equal(P.blockLetter('2026-10-27', b), P.blockLetter('2026-10-20', B)); // rotation picks up where it paused
 });
+
+// ---------- schedule ----------
+
+const T22 = '2026-10-22'; // Thursday
+const at = (h, m = 0) => new Date(2026, 9, 22, h, m);
+
+test('quick add reads times and breaks', () => {
+  const o = { today: T22 };
+  assert.equal(P.parseQuick('econ practice at 4pm 30m', o).at, '16:00');
+  assert.equal(P.parseQuick('chem lab at 16:30', o).at, '16:30');
+  assert.equal(P.parseQuick('physics at 4', o).at, '16:00'); // after school
+  assert.equal(P.parseQuick('call at 9am', o).at, '09:00');
+  assert.equal(P.parseQuick('meet at the library', o).at, null);
+  const b = P.parseQuick('break', o);
+  assert.equal(b.kind, 'break');
+  assert.equal(b.estimate, 10);
+  assert.equal(P.parseQuick('dinner 30m', o).estimate, 30);
+  const tm = P.parseQuick('calc review tmrw at 5pm', o);
+  assert.equal(tm.plan, '2026-10-23');
+});
+
+test('layoutDay runs tasks back to back from now, around classes and pins', () => {
+  const tasks = [
+    P.makeTask({ title: 'econ', plan: T22, estimate: 30, order: 1 }),
+    P.makeTask({ title: 'break', kind: 'break', plan: T22, estimate: 10, order: 2 }),
+    P.makeTask({ title: 'physics', plan: T22, estimate: 30, order: 3 }),
+    P.makeTask({ title: 'mun call', plan: T22, estimate: 20, at: '15:50', order: 4 }),
+  ];
+  const settings = { ...P.DEFAULT_SETTINGS, blocks: { ...B, schedule: { A: [{ start: '15:10', end: '15:30', label: 'Advisory' }] } } };
+  const ev = P.layoutDay({ tasks, settings, today: T22, now: at(15, 2) }).filter((e) => e.type !== 'session');
+  const byTitle = Object.fromEntries(ev.filter((e) => e.task).map((e) => [e.task.title, [e.start, e.end]]));
+  // Advisory (15:10–15:30) blocks 15:02; 15:30 is too short before the pinned 15:50 call → econ after it.
+  assert.deepEqual(byTitle['mun call'], [15 * 60 + 50, 16 * 60 + 10]);
+  assert.deepEqual(byTitle.econ, [16 * 60 + 10, 16 * 60 + 40]);
+  assert.deepEqual(byTitle.break, [16 * 60 + 40, 16 * 60 + 50]);
+  assert.deepEqual(byTitle.physics, [16 * 60 + 50, 17 * 60 + 20]);
+  assert.equal(P.nextUp(ev, 15 * 60 + 2).task.title, 'mun call');
+});
+
+test('layoutDay: a running (or paused) block pushes the flow back', () => {
+  const tasks = [P.makeTask({ title: 'econ', plan: T22, estimate: 30 }), P.makeTask({ title: 'physics', plan: T22, estimate: 30 })];
+  const focus = { taskId: tasks[0].id, startedAt: at(15, 0).getTime(), endsAt: at(15, 30).getTime() };
+  let ev = P.layoutDay({ tasks, focus, today: T22, now: at(15, 10) });
+  assert.deepEqual(ev.map((e) => e.type), ['focus', 'task']);
+  assert.equal(ev[1].start, 15 * 60 + 30);
+  // paused at 15:10, now 15:20 → block now ends 15:40, physics at 15:40
+  ev = P.layoutDay({ tasks, focus: { ...focus, pausedAt: at(15, 10).getTime() }, today: T22, now: at(15, 20) });
+  assert.equal(ev[1].start, 15 * 60 + 40);
+});
+
+test('lanes split only overlapping events', () => {
+  const ev = P.assignLanes([{ start: 0, end: 30 }, { start: 10, end: 20 }, { start: 40, end: 50 }]);
+  assert.deepEqual(ev.map((e) => [e.lane, e.lanes]), [[0, 2], [1, 2], [0, 1]]);
+});
+
+test('paused and break blocks are not strict focus', () => {
+  const now = new Date(2026, 9, 22, 16, 0);
+  const s = { ...P.DEFAULT_SETTINGS, guardMode: 'focus' };
+  assert.equal(P.guardState(s, { title: 'x' }, [], now).strict, true);
+  assert.equal(P.guardState(s, { title: 'x', pausedAt: 1 }, [], now).active, false);
+  assert.equal(P.guardState(s, { title: 'break', kind: 'break' }, [], now).active, false);
+});

@@ -99,27 +99,35 @@
     return parts.join('. ');
   }
 
-  async function focusStart({ taskId = null, title, course = null, minutes = 40 }) {
+  async function focusStart({ taskId = null, title, course = null, minutes = 40, kind = null }) {
     const existing = await P.store.get(K.focus, null);
-    if (existing) await focusStop('switched', { quiet: true });
+    if (existing) await focusStop('switched', { quiet: true, keepOnitry: true });
     const settings = await P.getSettings();
+    const tasks = await P.store.get(K.tasks, []);
+    const task = tasks.find((t) => t.id === taskId);
+    const isBreak = (kind || (task && task.kind)) === 'break';
     const now = Date.now();
     const focus = {
       id: P.newId(),
       taskId,
-      title: String(title || 'Focus').slice(0, 200),
+      title: String(title || (isBreak ? 'Break' : 'Focus')).slice(0, 200),
       course,
+      kind: isBreak ? 'break' : 'focus',
       startedAt: now,
       endsAt: now + minutes * 60000,
       minutes,
+      pausedAt: null,
+      pausedMs: 0,
       onitry: false,
-      onitryPending: settings.onitry.enabled && settings.onitry.autoStart,
+      onitryPending: !isBreak && settings.onitry.enabled && settings.onitry.autoStart,
       onitryError: null,
     };
     await P.store.set(K.focus, focus);
     PlanBg.focusActive = true;
     chrome.alarms.create(FOCUS_END, { when: focus.endsAt });
-    await P.log(`Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus');
+    await P.log(isBreak ? `${P.fmtMinutes(minutes)} break` : `Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus');
+    // A break pauses Onitry so it doesn't flag you for stepping away.
+    if (isBreak && settings.onitry.enabled) OnitryBridge.pause(settings.onitry, minutes);
     if (taskId) await P.updateTask(taskId, { plan: P.dateKey() });
     await syncGuard(true);
     await updateFocusBadge();
@@ -142,15 +150,19 @@
     const latest = await P.store.get(K.focus, null);
     if (!latest || latest.id !== focusId) return; // block ended while we were connecting
     await P.store.set(K.focus, { ...latest, onitry: !!res.ok, onitryPending: false, onitryError: res.ok ? null : res.error });
-    if (res.ok) await P.log(`Onitry is watching: ${latest.title}`, 'focus');
+    if (res.ok) {
+      OnitryBridge.resume(settings.onitry); // in case it was paused by a break or the Pause button
+      await P.log(`Onitry is watching: ${latest.title}`, 'focus');
+    }
   }
 
-  async function focusStop(outcome = 'stopped', { quiet = false } = {}) {
+  async function focusStop(outcome = 'stopped', { quiet = false, keepOnitry = false } = {}) {
     const focus = await P.store.get(K.focus, null);
     if (!focus) return { ok: false };
     const settings = await P.getSettings();
     const now = Date.now();
-    const minutes = Math.max(1, Math.round((now - focus.startedAt) / 60000));
+    const pausedMs = (focus.pausedMs || 0) + (focus.pausedAt ? now - focus.pausedAt : 0);
+    const minutes = Math.max(1, Math.round((now - focus.startedAt - pausedMs) / 60000));
     let onitry = null;
     if (focus.onitry) {
       const st = await OnitryBridge.status(settings.onitry);
@@ -158,24 +170,92 @@
         const total = (st.on_task_seconds || 0) + (st.off_task_seconds || 0);
         onitry = { onPct: total ? Math.round((st.on_task_seconds / total) * 100) : null, interrupts: st.interrupts || 0 };
       }
-      if (settings.onitry.autoStop && outcome !== 'switched') await OnitryBridge.stop(settings.onitry);
+      if (settings.onitry.autoStop && !keepOnitry) await OnitryBridge.stop(settings.onitry);
     }
-    const session = { id: focus.id, taskId: focus.taskId, title: focus.title, course: focus.course, start: focus.startedAt, end: now, minutes, planned: focus.minutes, outcome, onitry };
+    const session = { id: focus.id, taskId: focus.taskId, title: focus.title, course: focus.course, kind: focus.kind || 'focus', start: focus.startedAt, end: now, minutes, planned: focus.minutes, outcome, onitry };
     await P.store.update(K.sessions, [], (all) => all.concat([session]).slice(-3000));
-    if (outcome === 'done' && focus.taskId) await P.updateTask(focus.taskId, { done: now });
+    if ((outcome === 'done' || (focus.kind === 'break' && outcome === 'timeup')) && focus.taskId) await P.updateTask(focus.taskId, { done: now });
     await P.store.set(K.focus, null);
     await P.store.update(K.meta, {}, (m) => ({ ...m, escalatedUntil: 0 }));
     PlanBg.focusActive = false;
     chrome.alarms.clear(FOCUS_END);
     chrome.notifications.clear('focus-end');
-    if (!quiet) {
-      const verb = outcome === 'done' ? '✓ Finished' : outcome === 'timeup' ? 'Time up on' : 'Stopped';
+    if (!quiet && focus.kind === 'break') await P.log(`Break over (${P.fmtMinutes(minutes)})`, 'focus');
+    else if (!quiet) {
+      const verb = outcome === 'done' ? '✓ Finished' : outcome === 'timeup' ? 'Time up on' : outcome === 'skipped' ? 'Skipped' : 'Stopped';
       const extra = onitry && onitry.onPct != null ? ` · Onitry: ${onitry.onPct}% on task` : '';
       await P.log(`${verb} ${focus.title} after ${P.fmtMinutes(minutes)}${extra}`, outcome === 'done' ? 'done' : 'focus');
     }
     await syncGuard(true);
     await updateFocusBadge();
     return { ok: true, session };
+  }
+
+  async function focusPause() {
+    const focus = await P.store.get(K.focus, null);
+    if (!focus || focus.pausedAt) return { ok: false };
+    const settings = await P.getSettings();
+    focus.pausedAt = Date.now();
+    await P.store.set(K.focus, focus);
+    chrome.alarms.clear(FOCUS_END);
+    chrome.notifications.clear('focus-end');
+    if (focus.onitry && settings.onitry.enabled) OnitryBridge.pause(settings.onitry, 60);
+    await P.log(`Paused ${focus.title}`, 'focus');
+    await syncGuard(true);
+    await updateFocusBadge();
+    return { ok: true, focus };
+  }
+
+  async function focusResume() {
+    const focus = await P.store.get(K.focus, null);
+    if (!focus || !focus.pausedAt) return { ok: false };
+    const settings = await P.getSettings();
+    const paused = Date.now() - focus.pausedAt;
+    focus.endsAt += paused;
+    focus.pausedMs = (focus.pausedMs || 0) + paused;
+    focus.pausedAt = null;
+    await P.store.set(K.focus, focus);
+    chrome.alarms.create(FOCUS_END, { when: Math.max(Date.now() + 1000, focus.endsAt) });
+    if (focus.onitry && settings.onitry.enabled) OnitryBridge.resume(settings.onitry);
+    await P.log(`Resumed ${focus.title} after ${P.fmtMinutes(paused / 60000)}`, 'focus');
+    await syncGuard(true);
+    await updateFocusBadge();
+    return { ok: true, focus };
+  }
+
+  // ---------- running the schedule back to back ----------
+
+  // The next block on today's schedule that should start now (not one pinned for later).
+  async function nextScheduled(excludeId = null) {
+    const [tasks, settings, sessions] = await Promise.all([P.store.get(K.tasks, []), P.getSettings(), P.store.get(K.sessions, [])]);
+    const now = new Date();
+    const events = P.layoutDay({ tasks: tasks.filter((t) => t.id !== excludeId), settings, sessions, now, defaultMinutes: settings.focusMinutes });
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const next = P.nextUp(events, nowMin);
+    if (!next || next.start - nowMin > 10) return null;
+    return next.task;
+  }
+
+  async function startTask(t, settings) {
+    return focusStart({ taskId: t.id, title: t.title, course: t.course, minutes: P.taskMinutes(t, settings.focusMinutes), kind: t.kind === 'break' ? 'break' : 'focus' });
+  }
+
+  // outcome: 'done' (you finished it), 'timeup' (the timer ran out), 'skipped' (move it to the end).
+  async function advance(outcome) {
+    const focus = await P.store.get(K.focus, null);
+    if (!focus) return { ok: false };
+    const settings = await P.getSettings();
+    if (outcome === 'skipped' && focus.taskId) await P.updateTask(focus.taskId, { order: Date.now(), at: null });
+    const finished = outcome === 'done' || focus.kind === 'break';
+    await focusStop(finished ? 'done' : outcome, { keepOnitry: true });
+    // Unfinished work flows back in later; what comes next is always something else.
+    const next = await nextScheduled(focus.taskId);
+    if (!next) {
+      if (focus.onitry && settings.onitry.autoStop) await OnitryBridge.stop(settings.onitry);
+      return { ok: true, next: null };
+    }
+    await startTask(next, settings);
+    return { ok: true, next };
   }
 
   async function focusExtend(minutes = 10) {
@@ -198,10 +278,10 @@
       await chrome.action.setTitle({ title: 'Onitry Plan' }).catch(() => {});
       return;
     }
-    const left = Math.round((focus.endsAt - Date.now()) / 60000);
-    const offTask = lastOnitryStatus && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task';
-    const text = offTask ? '!' : left >= 0 ? `${left}m` : `+${-left}`;
-    const color = offTask ? '#d9363e' : left >= 0 ? '#2ea043' : '#e8590c';
+    const left = Math.round((P.focusEndsAt(focus) - Date.now()) / 60000);
+    const offTask = P.isFocusing(focus) && lastOnitryStatus && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task';
+    const text = focus.pausedAt ? '❚❚' : offTask ? '!' : left >= 0 ? `${left}m` : `+${-left}`;
+    const color = focus.pausedAt ? '#6b6b6b' : offTask ? '#d9363e' : focus.kind === 'break' ? '#1971c2' : left >= 0 ? '#2ea043' : '#e8590c';
     // Global badge, and also on the active tab so per-tab note counts don't hide it.
     await chrome.action.setBadgeBackgroundColor({ color }).catch(() => {});
     await chrome.action.setBadgeText({ text }).catch(() => {});
@@ -210,7 +290,7 @@
       await chrome.action.setBadgeBackgroundColor({ color, tabId: tab.id }).catch(() => {});
       await chrome.action.setBadgeText({ text, tabId: tab.id }).catch(() => {});
     }
-    await chrome.action.setTitle({ title: `Focusing: ${focus.title}` }).catch(() => {});
+    await chrome.action.setTitle({ title: `${focus.pausedAt ? 'Paused' : focus.kind === 'break' ? 'Break' : 'Focusing'}: ${focus.title}` }).catch(() => {});
   }
 
   // ---------- distraction gate ----------
@@ -278,12 +358,12 @@
     if (!settings.sites.includes(site)) return { ok: false, error: 'not a gated site' };
     const focus = await P.store.get(K.focus, null);
     const meta = await P.store.get(K.meta, {});
-    if (focus && (meta.escalatedUntil || 0) > Date.now()) return { ok: false, error: 'Onitry caught you off task. No passes for a few minutes.' };
-    const max = focus ? 5 : 60;
+    if (P.isFocusing(focus) && (meta.escalatedUntil || 0) > Date.now()) return { ok: false, error: 'Onitry caught you off task. No passes for a few minutes.' };
+    const max = P.isFocusing(focus) ? 5 : 60;
     const mins = Math.max(1, Math.min(max, Number(minutes) || settings.passMinutes));
     const until = Date.now() + mins * 60000;
     await P.store.update(K.passes, {}, (p) => ({ ...p, [site]: until }));
-    await P.log(`${site} for ${mins}m — “${String(reason || '').slice(0, 200)}”${focus ? ` (during focus on ${focus.title})` : ''}`, 'pass');
+    await P.log(`${site} for ${mins}m — “${String(reason || '').slice(0, 200)}”${P.isFocusing(focus) ? ` (during focus on ${focus.title})` : ''}`, 'pass');
     await syncGuard(true);
     return { ok: true, until, url };
   }
@@ -301,7 +381,7 @@
     if (!settings.onitry.enabled) return;
     lastOnitryStatus = { ...(await OnitryBridge.status(settings.onitry)), at: Date.now() };
     await P.store.set(K.onitry, lastOnitryStatus);
-    if (focus && settings.onitry.escalate && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task') await escalate(focus, lastOnitryStatus);
+    if (P.isFocusing(focus) && settings.onitry.escalate && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task') await escalate(focus, lastOnitryStatus);
     await updateFocusBadge();
   }
 
@@ -416,6 +496,13 @@
       m.nudgeTaskId = next ? next.id : null;
     }
 
+    // 1b) A paused block that's been sitting for 15 minutes.
+    if (focus && focus.pausedAt && Date.now() - focus.pausedAt >= 15 * 60000 && m.pauseNudged !== focus.id) {
+      m.pauseNudged = focus.id;
+      changed = true;
+      await notify('paused', `Still paused: ${focus.title}`, `Paused for ${P.fmtMinutes((Date.now() - focus.pausedAt) / 60000)}. Back to it?`, ['▶ Resume', 'End block']);
+    }
+
     // 2) Plan prompt: nothing on today's list by plan time.
     const planMin = P.minutesOfDay(settings.planTime);
     if (nowMin >= planMin && nowMin < planMin + 180 && m.planPrompted !== today && !open.length && working) {
@@ -470,7 +557,7 @@
   }
 
   // Handy for debugging from the service-worker console.
-  Object.assign(PlanBg, { tick, syncGuard, focusStart, focusStop, grantPass, checkOnitry, runReview, openPlannerTab });
+  Object.assign(PlanBg, { tick, syncGuard, focusStart, focusStop, focusPause, focusResume, advance, nextScheduled, grantPass, checkOnitry, runReview, openPlannerTab });
 
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === TICK) tick();
@@ -486,8 +573,19 @@
       if (expired.length && gs.active) await gateOpenTabs(expired);
     } else if (alarm.name === FOCUS_END) {
       const focus = await P.store.get(K.focus, null);
-      if (!focus) return;
-      await notify('focus-end', `Time’s up: ${focus.title}`, `${P.fmtMinutes(focus.minutes)} block finished. Done, or need more time?`, ['✓ Done', '+10 min'], true);
+      if (!focus || focus.pausedAt || Date.now() < focus.endsAt - 1000) return;
+      const settings = await P.getSettings();
+      const next = settings.autoAdvance ? await nextScheduled(focus.taskId) : null;
+      if (next && next.id !== focus.taskId) {
+        // Back to back: close this block and start the next one right away.
+        await P.store.update(K.meta, {}, (m) => ({ ...m, advancedFrom: focus.kind === 'break' ? null : focus.taskId }));
+        await advance('timeup');
+        const head = focus.kind === 'break' ? 'Break’s over' : `Time’s up: ${focus.title}`;
+        const body = `Now: ${next.title}${next.kind === 'break' ? '' : ` (${P.fmtMinutes(P.taskMinutes(next, settings.focusMinutes))})`}.${focus.kind === 'break' ? '' : ' Did you finish?'}`;
+        await notify('advance', head, body, focus.kind === 'break' ? ['❚❚ Pause'] : [`✓ Finished ${focus.title}`.slice(0, 40), '❚❚ Pause'], false);
+      } else {
+        await notify('focus-end', `Time’s up: ${focus.title}`, `${P.fmtMinutes(focus.minutes)} block finished. Done, or need more time?`, ['✓ Done', '+10 min'], true);
+      }
       await updateFocusBadge();
     }
   });
@@ -515,6 +613,16 @@
       if (index === 0 && t) await focusStart({ taskId: t.id, title: t.title, course: t.course, minutes: t.estimate || settings.focusMinutes });
       else if (index === 0) await openToday();
       else await P.store.set(K.meta, { ...meta, lastNudge: Date.now() }); // snooze = reset the timer
+    } else if (id === 'advance') {
+      const meta = await P.store.get(K.meta, {});
+      const buttons = meta.advancedFrom ? ['done', 'pause'] : ['pause'];
+      if (buttons[index] === 'done' && meta.advancedFrom) {
+        await P.updateTask(meta.advancedFrom, { done: Date.now() });
+        await P.log('✓ Marked done from the notification', 'done');
+      } else if (buttons[index] === 'pause') await focusPause();
+    } else if (id === 'paused') {
+      if (index === 0) await focusResume();
+      else await focusStop('stopped');
     } else if (id === 'plan' || id === 'escalate') await openToday();
     else if (id === 'eod') await openToday('#eod');
     else if (id === 'review') await openToday('#review');
@@ -541,6 +649,10 @@
       if (msg.action === 'start') job = focusStart(msg);
       else if (msg.action === 'stop') job = focusStop(msg.outcome || 'stopped');
       else if (msg.action === 'extend') job = focusExtend(msg.minutes);
+      else if (msg.action === 'pause') job = focusPause();
+      else if (msg.action === 'resume') job = focusResume();
+      else if (msg.action === 'done') job = P.getSettings().then((s) => (s.autoAdvance ? advance('done') : focusStop('done')));
+      else if (msg.action === 'skip') job = advance('skipped');
     } else if (msg.type === 'plan:pass') job = grantPass(msg);
     else if (msg.type === 'plan:guard-state') job = syncGuard(true);
     else if (msg.type === 'plan:review') job = runReview(msg.week);

@@ -84,15 +84,15 @@
           </li>
           <li data-step="tasks">
             <h3>Brain-dump your work</h3>
-            <p>Type everything into the <b>Add anything…</b> box, one per line. It reads dates, subjects, tests and time estimates out of plain words. Try it here, it uses your real subjects and block days:</p>
+            <p>Type everything into the <b>Add to your schedule…</b> box, one per line. It reads dates, subjects, tests, times (<code>at 4pm</code>), breaks and lengths out of plain words. Try it here, it uses your real subjects and block days:</p>
             <div class="try">
               <input id="tryQuick" spellcheck="false" placeholder="physics test next D" value="calc hw due tmrw 40m">
               <div class="try-out" id="tryQuickOut"></div>
             </div>
           </li>
           <li data-step="focus">
-            <h3>Run a focus block</h3>
-            <p>Press <b>▶</b> on a task (or type what you’re doing under <i>What are you doing right now?</i>) and pick a length. The toolbar badge counts down. While it runs, distracting sites are locked hard.</p>
+            <h3>Run your schedule</h3>
+            <p>Everything you add lands on the <b>Schedule</b> calendar, one block after another. Press <b>Start</b> in the bar above it and the blocks run back to back: when one ends, the next one starts. <b>Pause</b> when you get interrupted; the timer (and Onitry) wait for you. The toolbar badge counts down, and while a block runs distracting sites are locked hard.</p>
           </li>
           <li data-step="gate">
             <h3>Meet the gate</h3>
@@ -118,9 +118,9 @@
         <h2>What it does</h2>
         <p class="d-lead">Onitry Plan is a school-day planner that pushes back. It knows what’s due, what class you’re in, and, with Onitry, whether you’re actually working, and it gets in the way of the stuff that isn’t.</p>
         <div class="cards">
-          <div class="card"><b>Plan in plain words</b><p>“econ test fri”, “calc hw due next B 40m”. One task per line, pasted all at once if you like.</p></div>
+          <div class="card"><b>Plan in plain words</b><p>“econ practice 30m”, “break 10m”, “mun call at 4pm”, “calc hw due next B”. One per line, straight onto the schedule.</p></div>
           <div class="card"><b>Knows your schedule</b><p>A/B/C/D rotation, your classes, free blocks and breaks. Homework is laid out after your last class.</p></div>
-          <div class="card"><b>Focus blocks</b><p>A timer, a countdown badge, and the strictest version of the gate while it runs.</p></div>
+          <div class="card"><b>A real schedule</b><p>Your day as a calendar. Blocks run back to back around your classes; drag to pin, drag the edge to resize, pause when life happens.</p></div>
           <div class="card"><b>The gate</b><p>Distracting sites redirect to a page with your to-do list. Getting through costs a reason, a wait and sometimes a typed sentence.</p></div>
           <div class="card"><b>Nudges</b><p>Idle check-ins, free-block suggestions, test-tomorrow reminders, a plan prompt and an end-of-day check-in.</p></div>
           <div class="card"><b>Onitry inside</b><p>Starts screen monitoring on your task, shows on/off task live, locks the gate when you drift, and can launch the app.</p></div>
@@ -136,13 +136,20 @@
         <h2>Planning &amp; quick add</h2>
         <p>The planner has four parts. On a wide screen they sit side by side; in the side panel they’re tabs.</p>
         <dl class="defs">
-          <dt>Today</dt><dd>What you planned for today (or carried over), homework due today or tomorrow, anything overdue, and tests up to two days out. Each open task gets a time slot laid end to end from now, or from the end of your last class, so you can see when you’ll be done. If that runs past your cutoff (the end of work hours) it tells you to cut something. Drag the <b>⋮⋮</b> handle to reorder.</dd>
+          <dt>Schedule</dt><dd>Today as a calendar, like Google Calendar’s day view. Everything on today’s list (what you planned, homework due today or tomorrow, anything overdue, tests up to two days out) becomes a block, laid back to back from now in list order. Blocks flow around your classes (classes sit in their own rail on the left, and Free/Study blocks count as time you can use), around anything you pinned to a time, and after the block that’s running. The red line is now. Faded blocks are what you already did today.
+            <ul>
+              <li><b>Drag a block</b> to pin it at a time (it snaps to 5 minutes and shows 📌). Click 📌 to let it flow with the rest again.</li>
+              <li><b>Drag its bottom edge</b> to change how long it is.</li>
+              <li><b>Click an empty spot</b> to add something at that time.</li>
+              <li><b>▶</b> starts that block now; the checkbox marks it done; the title opens it for editing.</li>
+            </ul>
+            The footer says how many blocks are left and when you’ll be done, and warns you if that runs past your cutoff (the end of work hours).</dd>
           <dt>Week</dt><dd>A rolling 7 days starting today, so tomorrow is always visible, with each day’s letter. Click a day’s header to add something due that day. Below: everything due in the next three weeks.</dd>
           <dt>Free time</dt><dd>Projects and ideas for when there’s “nothing” to do. The gate and the free-block nudge suggest these when your list is empty. Press <b>+</b> to put one on today’s list.</dd>
           <dt>Journal</dt><dd>See <a href="#journal">Journal &amp; check-ins</a>.</dd>
         </dl>
         <p>Click any task’s title to edit it: subject, type (to-do, due, test), due date, estimate, whether it’s on today’s list or the free-time list, or delete it (with undo).</p>
-        <p>Quick add tips: <kbd>Enter</kbd> adds, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line, and pasting a whole list adds one task per line. Undated tasks go on today’s list. The full grammar is in the <a href="#ref-quick">cheat sheet</a>.</p>
+        <p>Quick add tips: <kbd>Enter</kbd> adds, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line, and pasting a whole list adds one task per line. Undated tasks go straight onto today’s schedule; the preview under the box shows exactly where (<b>→ 16:32–17:02</b>) before you press Enter. Add <code>at 4pm</code> to pin it, and start a line with <code>break</code>, <code>snack</code>, <code>dinner</code> or <code>walk</code> to make a break block. The full grammar is in the <a href="#ref-quick">cheat sheet</a>.</p>
       </section>
 
       <section id="blocks" class="d-sec">
@@ -168,11 +175,22 @@
       <section id="focus" class="d-sec">
         <p class="d-kicker">Using it</p>
         <h2>Focus blocks</h2>
-        <p>Start one with <b>▶</b> on any task, from the <i>What are you doing right now?</i> card, from the gate page, or from a nudge. Lengths are 15–90 minutes; the default comes from settings, or the task’s estimate.</p>
+        <p>Every block on your schedule is a focus block (or a break). Press <b>Start</b> in the bar above the schedule, or <b>▶</b> on any block. A block lasts as long as it is on the calendar: its estimate, or your default length.</p>
+        <h3>Back to back</h3>
+        <p>With <b>⚙ → Run my schedule back to back</b> on (the default), the schedule runs itself. When a block’s time is up, the next one starts and a notification asks whether you finished the last one (<b>✓ Finished</b>, or ignore it and it flows back in later). If the next block is pinned more than 10 minutes away, the run stops there and the bar shows <i>Next at…</i>.</p>
+        <h3>The bar</h3>
         <ul>
-          <li>The toolbar badge shows minutes left (green), minutes over (orange, <code>+5</code>), or <code>!</code> when Onitry says you’re off task (red).</li>
-          <li>When time’s up you get a notification with <b>✓ Done</b> and <b>+10 min</b>.</li>
-          <li><b>Done</b> ticks the task off. <b>Stop</b> ends the block without ticking it.</li>
+          <li><b>Pause</b> freezes the timer and pauses Onitry. The badge shows <code>❚❚</code>, the gate relaxes to its normal rules, and everything after it on the calendar slides later. <b>Resume</b> picks up where you left off. After 15 minutes paused you get a nudge.</li>
+          <li><b>Done</b> ticks it off and starts the next block.</li>
+          <li><b>+10</b> adds ten minutes.</li>
+          <li><b>Skip</b> moves it to the end of today and starts the next block.</li>
+          <li><b>Stop</b> ends the block and stops the run, without ticking anything off.</li>
+        </ul>
+        <h3>Breaks</h3>
+        <p>A line starting with <code>break</code>, <code>rest</code>, <code>snack</code>, <code>nap</code>, <code>walk</code>, <code>dinner</code>, <code>lunch</code>, <code>shower</code> or <code>stretch</code> is a break block (10 minutes unless you say otherwise). During a break the gate isn’t strict, Onitry is paused, and the break ticks itself off when it ends. Breaks don’t count toward your focus time.</p>
+        <ul>
+          <li>The toolbar badge shows minutes left (green; blue for a break), minutes over (orange, <code>+5</code>), <code>❚❚</code> when paused, or <code>!</code> when Onitry says you’re off task (red).</li>
+          <li>Without back to back, the end of a block sends a notification with <b>✓ Done</b> and <b>+10 min</b> instead.</li>
           <li>Every block is saved as a session: what, how long, how it ended, and Onitry’s on-task % if it was watching.</li>
           <li>Starting a new block while one is running ends the old one first.</li>
         </ul>
@@ -217,6 +235,8 @@
             <tr><td>Test tomorrow</td><td>After 6 pm, once per test</td><td>Study 25 min</td></tr>
             <tr><td>End-of-day check-in</td><td>At your check-in time, once a day</td><td>Check in</td></tr>
             <tr><td>Weekly review</td><td>On your review day, an hour before check-in time</td><td>Open review</td></tr>
+            <tr><td>Time’s up → next block</td><td>When a block ends and the next one starts by itself</td><td>✓ Finished · Pause</td></tr>
+            <tr><td>Still paused</td><td>A block has been paused 15 minutes</td><td>Resume · End block</td></tr>
             <tr><td>Onitry caught you off task</td><td>During a focus block, when Onitry reports off task</td><td>Open planner</td></tr>
           </tbody>
         </table>
@@ -369,9 +389,9 @@ python native_host/install.py   # use the Python you run Onitry with
         <p>The decision and the enforcement are separate.</p>
         <p><b>Deciding.</b> <code>guardState(settings, focus, tasks, now, escalatedUntil)</code> is a pure function, checked in this order:</p>
         <ol>
-          <li>Focus block running and Onitry escalation active → up, strict, reason <i>onitry</i>.</li>
+          <li>A focus block running (not paused, not a break) and Onitry escalation active → up, strict, reason <i>onitry</i>.</li>
           <li>Mode is Off → down.</li>
-          <li>Focus block running → up, strict.</li>
+          <li>A focus block running (not paused, not a break) → up, strict.</li>
           <li>Mode is Focus → down. Mode is Always → up.</li>
           <li>Smart: something due by tomorrow or planned for today, and you’re in work hours → up. Same but in a Free/Study block → up. Otherwise down.</li>
         </ol>
@@ -395,7 +415,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
           <tbody>
             <tr><td><code>plan-tick</code></td><td>Every minute</td><td>Refreshes Onitry’s status, re-syncs the gate and badge, and checks each nudge’s conditions</td></tr>
             <tr><td><code>plan-onitry</code></td><td>Every 30 s, only during a focus block with Onitry connected</td><td>Polls Onitry; escalates if it reports off task</td></tr>
-            <tr><td><code>plan-focus-end</code></td><td>When the block’s time is up</td><td>The Done / +10 min notification</td></tr>
+            <tr><td><code>plan-focus-end</code></td><td>When the block’s time is up (cleared while paused)</td><td>Starts the next block on the schedule, or the Done / +10 min notification</td></tr>
             <tr><td><code>plan-pass-expire</code></td><td>When the next gate pass runs out</td><td>Re-gates that site and its open tabs</td></tr>
           </tbody>
         </table>
@@ -413,6 +433,8 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>GET /v1/status</code></td><td>—</td><td>running, on/off task, task, activity, on- and off-task seconds, interrupts, paused</td></tr>
             <tr><td><code>POST /v1/task</code></td><td><code>{task, details}</code></td><td>Starts monitoring that task (stopping any other)</td></tr>
             <tr><td><code>POST /v1/stop</code></td><td><code>{}</code></td><td>Stops monitoring</td></tr>
+            <tr><td><code>POST /v1/pause</code></td><td><code>{minutes}</code></td><td>Pauses monitoring (Pause button, break blocks)</td></tr>
+            <tr><td><code>POST /v1/resume</code></td><td><code>{}</code></td><td>Ends the pause</td></tr>
             <tr><td><code>POST /v1/review</code></td><td><code>{stats}</code></td><td>The weekly review text</td></tr>
           </tbody>
         </table>
@@ -488,7 +510,10 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>chem summative 10/16</code> · <code>oct 16</code> · <code>16 oct</code></td><td>A date</td></tr>
             <tr><td><code>read ch 4 in 3 days</code></td><td>Due three days from now</td></tr>
             <tr><td><code>physics frq due next B</code> · <code>D day</code> · <code>on A-day</code></td><td>The next date with that letter</td></tr>
-            <tr><td><code>email mrs neri 10m</code></td><td>No date → today’s list</td></tr>
+            <tr><td><code>email mrs neri 10m</code></td><td>No date → straight onto today’s schedule</td></tr>
+            <tr><td><code>mun call at 4pm</code> · <code>at 16:30</code> · <code>at 4</code></td><td>Pinned at that time (a bare 1–6 means afternoon)</td></tr>
+            <tr><td><code>calc review tmrw at 5pm</code></td><td>Pinned on tomorrow’s schedule</td></tr>
+            <tr><td><code>break</code> · <code>snack 15m</code> · <code>dinner 30m</code></td><td>A break block (10 min by default)</td></tr>
             <tr><td><code>~ cad the claw</code> · <code>someday: kaggle</code></td><td>Free-time list</td></tr>
             <tr><td><code>robot wiring #frc</code></td><td>Force a subject</td></tr>
             <tr><td><code>1h</code> · <code>1.5h</code> · <code>1h30</code> · <code>45 min</code></td><td>Estimates</td></tr>
@@ -510,7 +535,8 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td>Default pass</td><td>10 min</td><td>Outside focus blocks, up to 60</td></tr>
             <tr><td>Work hours</td><td>Weekdays 15:00–23:30, weekends 10:00–23:30</td><td>Used by Smart mode, check-ins and the plan prompt</td></tr>
             <tr><td>Check-in every</td><td>30 min</td><td>0 turns it off</td></tr>
-            <tr><td>Focus block</td><td>40 min</td><td></td></tr>
+            <tr><td>Default block length</td><td>40 min</td><td>For blocks without an estimate</td></tr>
+            <tr><td>Run back to back</td><td>On</td><td>Start the next block when one ends</td></tr>
             <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
             <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
             <tr><td>Weekly review reminder</td><td>Sunday evening</td><td>Friday, Saturday or off</td></tr>
