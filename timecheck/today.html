@@ -183,6 +183,28 @@
       <label>Gated sites (one per line)<textarea name="sites" rows="4" spellcheck="false"></textarea></label>
       <label>Default pass length (minutes)<input type="number" name="passMinutes" min="1" max="60"></label>
 
+      <div class="set-sec">Breaks &amp; off switch</div>
+      <p class="set-help">A <b>Break</b> opens every gated site and pauses Onitry for a few minutes. Past the daily budget a break needs your off-switch code.</p>
+      <label>Daily break budget (minutes)<input type="number" name="breakBudget" min="0" max="240" step="5"></label>
+      <div class="set-help" id="breakUsage"></div>
+      <div class="set-label">Off-switch code (4 to 6 digits)</div>
+      <div class="off-grid">
+        <label id="offOldWrap">Current code<input id="offOld" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+        <label>New code<input id="offNew" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+        <span class="off-btns">
+          <button type="button" class="btn" id="offSet">Set code</button>
+          <button type="button" class="btn" id="offRemove">Remove</button>
+        </span>
+      </div>
+      <p class="set-help">Only a salted hash of the code is stored, never the code itself. Changing or removing it needs the current one.</p>
+      <div class="set-label">Turn the gate and Onitry off</div>
+      <div class="off-grid">
+        <label>Code<input id="offUse" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+        <span class="off-btns" id="offChoices"></span>
+      </div>
+      <div class="set-help" id="offStatus"></div>
+      <div class="onitry-result" id="offMsg" role="status"></div>
+
       <div class="set-sec">Work hours &amp; nudges</div>
       <div class="row2">
         <label>Weekdays from<input type="time" name="workStart"></label>

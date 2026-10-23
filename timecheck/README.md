@@ -24,7 +24,8 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 
 **Focus**
 - **Focus blocks in succession:** press Start and the whole queue runs itself; when a block ends, the next one starts (and you're asked if you finished). The card at the top has **Pause / Resume**, Done, +5, Skip and Stop. Pausing also pauses Onitry and slides the rest of the day later.
-- **Break blocks** (set the add row's type to Break) loosen the gate, pause Onitry and tick themselves off.
+- **Breaks:** press **Break** on the top card (with or without a block running) and pick 5 to 30 minutes, or add a Break block to the queue. Every gated site opens, Onitry pauses, and when it ends the alarm rings, the gate comes back and the next block starts if a run was going. A daily budget (45 min by default, "25 of 45 min used today") makes a break past it ask for your code.
+- **Off-switch code:** set a 4 to 6 digit code in ⚙ → Breaks & off switch (stored as a salted hash). On the gate page or in ⚙, entering it turns the gate and Onitry off for 15 minutes, 1 hour or the rest of the day. Each use is logged.
 - **An alarm rings when a block ends.** With nothing next, the bar turns red with **⏰ Time's up** (Done / +5 / +10 / Stop) instead of counting up; it rings again after 2 minutes and ends the block itself after 10.
 - The toolbar badge counts down accurately (minutes rounded up, seconds in the last minute while the planner is open, `❚❚` paused, `END` time's up) and clears the moment nothing's running.
 - **Distraction gate:** YouTube, Reddit and other sites redirect to a page that shows what's due. To get through, you write a reason (it's logged to your journal) and wait. The wait grows each time you come back. During a focus block you also have to type out a sentence, and passes are capped at 5 minutes.

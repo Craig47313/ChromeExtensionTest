@@ -151,6 +151,25 @@
     else $('#count').textContent = `Couldn’t open: ${(res && res.error) || 'unknown error'}`;
   });
 
+  // ---------- the off switch ----------
+
+  if (settings.offCode) {
+    $('#offBox').hidden = false;
+    for (const c of P.OFF_CHOICES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = c.label;
+      b.addEventListener('click', async () => {
+        const res = await chrome.runtime.sendMessage({ type: 'plan:offswitch', code: $('#offCode').value, choice: c.id });
+        if (res && res.ok) location.replace(target || `https://${site}`);
+        else $('#offMsg').textContent = res && res.error === 'wrong' ? 'That code isn’t right.' : 'Couldn’t turn the gate off.';
+      });
+      $('#offChoices').appendChild(b);
+    }
+    $('#offCode').addEventListener('keydown', (e) => e.key === 'Enter' && e.preventDefault());
+  }
+
   // ---------- today's stats ----------
 
   const mins = passesToday.reduce((sum, e) => sum + (parseInt((/for (\d+)m/.exec(e.text) || [])[1], 10) || 0), 0);

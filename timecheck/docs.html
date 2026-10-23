@@ -190,6 +190,7 @@
           <li><b>Done</b> ticks it off and starts the next block.</li>
           <li><b>+5</b> adds five minutes.</li>
           <li><b>Skip</b> moves it to the end of the queue and starts the next block.</li>
+          <li><b>Break</b> starts a break (see below).</li>
           <li><b>Stop</b> ends the block and stops the run, without ticking anything off.</li>
         </ul>
         <h3>When a block ends</h3>
@@ -199,7 +200,25 @@
           <li><b>Nothing next (or back to back off):</b> the bar turns red and says <b>⏰ Time’s up</b>, with <b>Done</b>, <b>+5 min</b>, <b>+10 min</b> and <b>Stop</b>. It doesn’t count up. If you don’t answer, it rings again after 2 minutes, and after 10 minutes the block ends by itself (logged as ending when the time ran out).</li>
         </ul>
         <h3>Breaks</h3>
-        <p>A line starting with <code>break</code>, <code>rest</code>, <code>snack</code>, <code>nap</code>, <code>walk</code>, <code>dinner</code>, <code>lunch</code>, <code>shower</code> or <code>stretch</code> is a break block (10 minutes unless you say otherwise). During a break the gate isn’t strict, Onitry is paused, and the break ticks itself off when it ends. Breaks don’t count toward your focus time.</p>
+        <p>A <b>Break</b> opens every gated site and pauses Onitry for a few minutes. Press <b>Break</b> on the top card, with or without a block running, and set the length with the stepper (5 to 30 minutes, 10 by default). Or add a block of type <b>Break</b> to the queue.</p>
+        <ul>
+          <li><b>During it</b> every gated site opens with no reason or wait, Onitry is paused, and the badge counts down in blue. Breaks don’t count toward your focus time.</li>
+          <li><b>When it ends</b> the alarm rings, gated sites close again (open distracting tabs go back to the gate), Onitry picks up again, and the next block starts if a run was going. A break you took with nothing running just ends.</li>
+          <li><b>A block that was running</b> when you pressed Break stops (logged as <i>switched</i>) and goes back in the queue, so it is usually the one that starts after the break.</li>
+          <li><b>Daily budget:</b> ⚙ → Breaks &amp; off switch sets how many minutes of break you get a day (45 by default). The break panel shows <i>“25 of 45 min used today”</i>. Once it is used up, another break needs your off-switch code, and a queued break doesn’t start by itself. Every break goes in the Log with its length. With no code set, the budget is only a number on the screen.</li>
+        </ul>
+        <h3>Off switch</h3>
+        <p>Set a 4 to 6 digit code in <b>⚙ → Breaks &amp; off switch</b>. Only a salted hash of it is stored, never the code. Changing or removing it needs the old code. Enter the code in ⚙, or on the gate page under <i>I have my off-switch code</i>, and pick:</p>
+        <table class="tbl">
+          <thead><tr><th>Choice</th><th>Gate</th><th>Onitry</th></tr></thead>
+          <tbody>
+            <tr><td>15 minutes</td><td>off</td><td>paused 15 min</td></tr>
+            <tr><td>1 hour</td><td>off</td><td>paused 1 hour</td></tr>
+            <tr><td>Rest of today</td><td>off until midnight</td><td>monitoring stopped</td></tr>
+          </tbody>
+        </table>
+        <p>While it is on, a note on the top card says when it ends and has <b>Turn back on</b> (no code needed). Each use goes in the Log (<i>“Off switch: rest of today, 9:40 PM”</i>). The code is a speed bump for you, not a lock.</p>
+        <h3>The badge and sessions</h3>
         <ul>
           <li>The toolbar badge shows minutes left, rounded up (<code>3m</code> means up to 3 minutes; green, blue for a break), <code>&lt;1m</code> in the last minute (seconds while a planner page is open), <code>❚❚</code> when paused, <code>END</code> when time’s up, or <code>!</code> when Onitry says you’re off task. It goes blank the moment no block is running.</li>
           <li>Every block is saved as a session: what, how long, how it ended, and Onitry’s on-task % if it was watching.</li>
@@ -390,8 +409,10 @@ python native_host/install.py   # use the Python you run Onitry with
         <p class="d-kicker">How it works</p>
         <h2>Gate rules</h2>
         <p>The decision and the enforcement are separate.</p>
-        <p><b>Deciding.</b> <code>guardState(settings, focus, tasks, now, escalatedUntil)</code> is a pure function, checked in this order:</p>
+        <p><b>Deciding.</b> <code>guardState(settings, focus, tasks, now, escalatedUntil, offUntil)</code> is a pure function, checked in this order:</p>
         <ol>
+          <li>The off switch is on (<code>offUntil</code> in the future) → down.</li>
+          <li>A break is running → down.</li>
           <li>A focus block running (not paused, not a break) and Onitry escalation active → up, strict, reason <i>onitry</i>.</li>
           <li>Mode is Off → down.</li>
           <li>A focus block running (not paused, not a break) → up, strict.</li>
@@ -422,6 +443,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>plan-badge</code></td><td>Each time the badge’s minute count changes</td><td>Keeps the badge exact with no page open</td></tr>
             <tr><td><code>plan-ring-again</code> · <code>plan-timeup-close</code></td><td>2 and 10 minutes after an unanswered Time’s up</td><td>Rings again; then ends the block</td></tr>
             <tr><td><code>plan-pass-expire</code></td><td>When the next gate pass runs out</td><td>Re-gates that site and its open tabs</td></tr>
+            <tr><td><code>plan-off-end</code></td><td>When the off switch runs out</td><td>Puts the gate back up and re-gates open tabs</td></tr>
           </tbody>
         </table>
         <p>Each nudge remembers when it last fired in <code>pl:meta</code> (for example <code>eodPrompted: "2026-10-19"</code>), so it fires once per day, block or test even though the tick runs every minute. The idle check-in uses Chrome’s <code>idle</code> API to make sure you’re actually at the computer.</p>
@@ -541,6 +563,8 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td>Alarm when a block ends</td><td>On</td><td>With a Test sound button</td></tr>
             <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
             <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
+            <tr><td>Daily break budget</td><td>45 min</td><td>Past it a break needs the off-switch code</td></tr>
+            <tr><td>Off-switch code</td><td>None</td><td>4 to 6 digits, stored as a salted hash</td></tr>
             <tr><td>Weekly review reminder</td><td>Sunday evening</td><td>Friday, Saturday or off</td></tr>
             <tr><td>Subjects</td><td>Your 14 subjects</td><td><code>Name: alias, alias</code>, one per line</td></tr>
           </tbody>
@@ -562,7 +586,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>pl:settings</code></td><td>Everything in ⚙</td></tr>
             <tr><td><code>pl:onitry</code></td><td>Onitry’s last status</td></tr>
             <tr><td><code>pl:reviews</code></td><td>Weekly reviews by week</td></tr>
-            <tr><td><code>pl:meta</code></td><td>Nudge bookkeeping, escalation, gate errors</td></tr>
+            <tr><td><code>pl:meta</code></td><td>Nudge bookkeeping, escalation, the off switch’s end time (<code>offUntil</code>), gate errors</td></tr>
           </tbody>
         </table>
       </section>

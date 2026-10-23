@@ -12,6 +12,7 @@
   const TICK = 'plan-tick';
   const FOCUS_END = 'plan-focus-end';
   const PASS_EXPIRE = 'plan-pass-expire';
+  const OFF_END = 'plan-off-end'; // the off switch runs out
   const ONITRY_POLL = 'plan-onitry'; // every 30s during a watched focus block
   const BADGE = 'plan-badge'; // re-draws the badge when its minute count changes
   const RING_AGAIN = 'plan-ring-again';
@@ -34,6 +35,8 @@
     const focus = await P.store.get(K.focus, null);
     PlanBg.focusActive = !!focus;
     if (focus) chrome.alarms.create(FOCUS_END, { when: Math.max(Date.now() + 1000, focus.endsAt) });
+    const meta = await P.store.get(K.meta, {});
+    if ((meta.offUntil || 0) > Date.now()) chrome.alarms.create(OFF_END, { when: meta.offUntil + 500 });
     await applyPlacement();
     await updateOnitryPoll();
     await syncGuard(true);
@@ -104,13 +107,21 @@
     return parts.join('. ');
   }
 
-  async function focusStart({ taskId = null, title, course = null, minutes = 40, kind = null }) {
+  async function focusStart({ taskId = null, title, course = null, minutes = 40, kind = null, code = null }) {
     const existing = await P.store.get(K.focus, null);
-    if (existing) await focusStop('switched', { quiet: true, keepOnitry: true });
     const settings = await P.getSettings();
     const tasks = await P.store.get(K.tasks, []);
     const task = tasks.find((t) => t.id === taskId);
     const isBreak = (kind || (task && task.kind)) === 'break';
+    const meta = await P.store.get(K.meta, {});
+    const offNow = (meta.offUntil || 0) > Date.now();
+    if (isBreak) minutes = Math.max(1, Math.min(240, Math.round(minutes || 10)));
+    // Past the day's break budget a break needs the off-switch code (when one is set).
+    if (isBreak && settings.offCode && !(existing && existing.kind === 'break')) {
+      const bs = await breakBudget(settings, existing);
+      if (bs.over && !(await P.checkOffCode(code, settings.offCode))) return { ok: false, error: 'budget', used: bs.used, budget: bs.budget, wrong: !!code };
+    }
+    if (existing) await focusStop('switched', { quiet: true, keepOnitry: true });
     const now = Date.now();
     const focus = {
       id: P.newId(),
@@ -124,15 +135,18 @@
       pausedAt: null,
       pausedMs: 0,
       onitry: false,
-      onitryPending: !isBreak && settings.onitry.enabled && settings.onitry.autoStart,
+      onitryPending: !isBreak && !offNow && settings.onitry.enabled && settings.onitry.autoStart,
       onitryError: null,
+      // A break you take on the spot hands back to the queue only if a run was going; a queued break is part of the run.
+      runAfter: isBreak ? (taskId ? true : !!existing) : true,
+      carryOnitry: isBreak && !!(existing && (existing.onitry || existing.carryOnitry)),
     };
     await P.store.set(K.focus, focus);
     PlanBg.focusActive = true;
     chrome.alarms.create(FOCUS_END, { when: focus.endsAt });
     await P.log(isBreak ? `${P.fmtMinutes(minutes)} break` : `Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus');
     // A break pauses Onitry so it doesn't flag you for stepping away.
-    if (isBreak && settings.onitry.enabled) OnitryBridge.pause(settings.onitry, minutes);
+    if (isBreak && settings.onitry.enabled && !offNow) OnitryBridge.pause(settings.onitry, minutes);
     if (taskId) await P.updateTask(taskId, { plan: P.dateKey() });
     await syncGuard(true);
     await updateFocusBadge();
@@ -172,7 +186,7 @@
     const pausedMs = (focus.pausedMs || 0) + (focus.pausedAt ? end - focus.pausedAt : 0);
     const minutes = Math.max(1, Math.round((end - focus.startedAt - pausedMs) / 60000));
     let onitry = null;
-    if (focus.onitry) {
+    if (focus.onitry || focus.carryOnitry) {
       const st = await OnitryBridge.status(settings.onitry);
       if (st.ok) {
         const total = (st.on_task_seconds || 0) + (st.off_task_seconds || 0);
@@ -234,12 +248,45 @@
   // ---------- running the schedule back to back ----------
 
   // The next block on today's schedule that should start now (not one pinned for later).
+  async function breakBudget(settings, focus = null) {
+    const sessions = await P.store.get(K.sessions, []);
+    return P.breakStatus(settings, { sessions, focus });
+  }
+
+  // The off-switch code turns the gate off and pauses (or stops) Onitry for a while.
+  async function offSwitch({ code, choice }) {
+    const settings = await P.getSettings();
+    if (choice === 'cancel') {
+      await P.store.update(K.meta, {}, (m) => ({ ...m, offUntil: 0 }));
+      chrome.alarms.clear(OFF_END);
+      await syncGuard(true);
+      await P.log('Off switch ended early', 'system');
+      return { ok: true };
+    }
+    if (!settings.offCode) return { ok: false, error: 'nocode' };
+    if (!(await P.checkOffCode(code, settings.offCode))) return { ok: false, error: 'wrong' };
+    const win = P.offWindow(choice);
+    if (!win) return { ok: false, error: 'choice' };
+    await P.store.update(K.meta, {}, (m) => ({ ...m, offUntil: win.until, escalatedUntil: 0 }));
+    await P.store.set(K.passes, {});
+    chrome.alarms.create(OFF_END, { when: win.until });
+    if (settings.onitry.enabled) {
+      if (win.pauseMinutes) OnitryBridge.pause(settings.onitry, win.pauseMinutes);
+      else OnitryBridge.stop(settings.onitry);
+    }
+    await P.log(`Off switch: ${win.label.toLowerCase()}, ${P.fmtTime(Date.now())}`, 'system');
+    await syncGuard(true);
+    return { ok: true, until: win.until };
+  }
+
   async function nextScheduled(excludeId = null) {
     const [tasks, settings, sessions] = await Promise.all([P.store.get(K.tasks, []), P.getSettings(), P.store.get(K.sessions, [])]);
     const now = new Date();
     const events = P.layoutDay({ tasks: tasks.filter((t) => t.id !== excludeId), settings, sessions, now, defaultMinutes: settings.focusMinutes });
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const next = P.nextUp(events, nowMin);
+    // With the break budget spent, a queued break doesn't start by itself (you can still start it with the code).
+    const skipBreaks = !!settings.offCode && P.breakStatus(settings, { sessions }).over;
+    const next = events.find((e) => e.type === 'task' && e.end > nowMin && !(skipBreaks && e.task.kind === 'break')) || null;
     if (!next || next.start - nowMin > 10) return null;
     return next.task;
   }
@@ -379,7 +426,7 @@
   async function syncGuardNow(force = false) {
     const [settings, focus, tasks, meta] = await Promise.all([P.getSettings(), P.store.get(K.focus, null), P.store.get(K.tasks, []), P.store.get(K.meta, {})]);
     const passes = await activePasses();
-    const gs = P.guardState(settings, focus, tasks, new Date(), meta.escalatedUntil || 0);
+    const gs = P.guardState(settings, focus, tasks, new Date(), meta.escalatedUntil || 0, meta.offUntil || 0);
     const sites = gs.active ? settings.sites.filter((s) => !passes[s]) : [];
     const key = JSON.stringify(sites);
 
@@ -455,7 +502,8 @@
     if (!settings.onitry.enabled) return;
     lastOnitryStatus = { ...(await OnitryBridge.status(settings.onitry)), at: Date.now() };
     await P.store.set(K.onitry, lastOnitryStatus);
-    if (P.isFocusing(focus) && settings.onitry.escalate && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task') await escalate(focus, lastOnitryStatus);
+    const off = ((await P.store.get(K.meta, {})).offUntil || 0) > Date.now();
+    if (!off && P.isFocusing(focus) && settings.onitry.escalate && lastOnitryStatus.ok && lastOnitryStatus.running && lastOnitryStatus.status === 'off_task') await escalate(focus, lastOnitryStatus);
     await updateFocusBadge();
   }
 
@@ -643,12 +691,31 @@
       const expired = Object.keys(before).filter((s) => !after[s]);
       const settings = await P.getSettings();
       const meta = await P.store.get(K.meta, {});
-      const gs = P.guardState(settings, await P.store.get(K.focus, null), await P.store.get(K.tasks, []), new Date(), meta.escalatedUntil || 0);
+      const gs = P.guardState(settings, await P.store.get(K.focus, null), await P.store.get(K.tasks, []), new Date(), meta.escalatedUntil || 0, meta.offUntil || 0);
       if (expired.length && gs.active) await gateOpenTabs(expired);
+    } else if (alarm.name === OFF_END) {
+      await syncGuard(true);
+      await P.log('Off switch over: the gate is back', 'system');
     } else if (alarm.name === FOCUS_END) {
       const focus = await P.store.get(K.focus, null);
       if (!focus || focus.pausedAt || focus.timeUpAt || Date.now() < focus.endsAt - 1000) return;
       const settings = await P.getSettings();
+      if (focus.kind === 'break') {
+        // A break ends by itself: the gate closes again, then the next block starts if a run was going.
+        const after = settings.autoAdvance && focus.runAfter !== false ? await nextScheduled(focus.taskId) : null;
+        if (after) {
+          await P.store.update(K.meta, {}, (m) => ({ ...m, advancedFrom: null }));
+          await advance('timeup');
+          ringAlarm(2);
+          await notify('advance', 'Break’s over', `Now: ${after.title}${after.kind === 'break' ? '' : ` (${P.fmtMinutes(P.taskMinutes(after, settings.focusMinutes))})`}.`, ['❚❚ Pause'], false);
+        } else {
+          await focusStop('done');
+          ringAlarm(3);
+          await notify('break-end', 'Break’s over', 'The gate is back up. Back to it when you’re ready.', ['Open planner'], false);
+        }
+        await updateFocusBadge();
+        return;
+      }
       const next = settings.autoAdvance ? await nextScheduled(focus.taskId) : null;
       if (next && next.id !== focus.taskId) {
         // Back to back: close this block and start the next one right away.
@@ -709,7 +776,7 @@
     } else if (id === 'paused') {
       if (index === 0) await focusResume();
       else await focusStop('stopped');
-    } else if (id === 'plan' || id === 'escalate') await openToday();
+    } else if (id === 'plan' || id === 'escalate' || id === 'break-end') await openToday();
     else if (id === 'eod') await openToday('#eod');
     else if (id === 'review') await openToday('#review');
     else if (id === 'free') {
@@ -737,9 +804,10 @@
       else if (msg.action === 'extend') job = focusExtend(msg.minutes);
       else if (msg.action === 'pause') job = focusPause();
       else if (msg.action === 'resume') job = focusResume();
-      else if (msg.action === 'done') job = P.getSettings().then((s) => (s.autoAdvance ? advance('done') : focusStop('done')));
+      else if (msg.action === 'done') job = Promise.all([P.getSettings(), P.store.get(K.focus, null)]).then(([s, f]) => (s.autoAdvance && !(f && f.kind === 'break' && f.runAfter === false) ? advance('done') : focusStop('done')));
       else if (msg.action === 'skip') job = advance('skipped');
-    } else if (msg.type === 'plan:pass') job = grantPass(msg);
+    } else if (msg.type === 'plan:offswitch') job = offSwitch(msg);
+    else if (msg.type === 'plan:pass') job = grantPass(msg);
     else if (msg.type === 'plan:guard-state') job = syncGuard(true);
     else if (msg.type === 'plan:review') job = runReview(msg.week);
     else if (msg.type === 'plan:test-alarm') job = ringAlarm(1, { force: true });

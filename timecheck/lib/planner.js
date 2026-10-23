@@ -417,6 +417,62 @@
     return orders.length ? Math.min(...orders) - 1 : Date.now();
   }
 
+  // ---------- breaks and the off switch ----------
+
+  // Minutes of break taken on `today`: finished breaks plus the one running now.
+  function breakUsed({ sessions = [], focus = null, now = Date.now(), today = dateKey(new Date(now)) } = {}) {
+    let used = 0;
+    for (const s of sessions) if (s.kind === 'break' && dateKey(new Date(s.end)) === today) used += s.minutes || 0;
+    if (focus && focus.kind === 'break' && dateKey(new Date(focus.startedAt)) === today) {
+      const at = focus.pausedAt || now;
+      used += Math.max(0, Math.round((Math.min(at, focus.endsAt) - focus.startedAt - (focus.pausedMs || 0)) / 60000));
+    }
+    return used;
+  }
+
+  // { used, budget, left, over }: `over` once the day's budget is spent.
+  function breakStatus(settings, data = {}) {
+    const budget = Math.max(0, Number(settings.breakBudget) || 0);
+    const used = breakUsed(data);
+    return { used, budget, left: Math.max(0, budget - used), over: used >= budget };
+  }
+
+  const validCode = (code) => /^\d{4,6}$/.test(String(code || ''));
+
+  const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  async function hashCode(code, salt) {
+    return toHex(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${code}`)));
+  }
+
+  // The stored form of a code: a random salt and the hash of salt + code.
+  async function makeOffCode(code) {
+    const salt = toHex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+    return { salt, hash: await hashCode(code, salt) };
+  }
+
+  async function checkOffCode(code, stored) {
+    if (!stored || !stored.salt || !validCode(code)) return false;
+    return (await hashCode(String(code), stored.salt)) === stored.hash;
+  }
+
+  const OFF_CHOICES = [
+    { id: '15m', label: '15 minutes', minutes: 15 },
+    { id: '1h', label: '1 hour', minutes: 60 },
+    { id: 'day', label: 'Rest of today', minutes: null },
+  ];
+
+  // When the off switch ends for a choice, and how long Onitry is paused (null = stopped for the day).
+  function offWindow(choice, now = Date.now()) {
+    const c = OFF_CHOICES.find((x) => x.id === choice);
+    if (!c) return null;
+    if (c.minutes) return { until: now + c.minutes * 60000, pauseMinutes: c.minutes, label: c.label };
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return { until: midnight.getTime(), pauseMinutes: null, label: c.label };
+  }
+
+
   // ---------- guard (distraction gate) ----------
 
   const DEFAULT_SITES = ['youtube.com', 'reddit.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com', 'netflix.com', 'twitch.tv', 'facebook.com'];
@@ -441,6 +497,8 @@
     palette: 'monitry',
     placement: 'panel', // panel | tab | newtab
     weeklyReviewDay: 0, // Sunday evening nudge
+    breakBudget: 45, // minutes of breaks a day before another one needs the off-switch code
+    offCode: null, // { salt, hash } of the 4 to 6 digit off-switch code, never the code itself
     onitry: { enabled: false, code: '', autoStart: true, autoStop: true, escalate: true, launch: true, port: 47323 },
   };
 
@@ -471,9 +529,11 @@
   // A paused block or a break block doesn't count as focusing.
   const isFocusing = (focus) => !!focus && focus.kind !== 'break' && !focus.pausedAt;
 
-  function guardState(settings, focus, tasks, now = new Date(), escalatedUntil = 0) {
+  function guardState(settings, focus, tasks, now = new Date(), escalatedUntil = 0, offUntil = 0) {
     const mode = settings.guardMode;
     const focusing = isFocusing(focus);
+    if (offUntil > now.getTime()) return { active: false, reason: 'off switch', offUntil };
+    if (focus && focus.kind === 'break') return { active: false, reason: 'break' }; // a break opens everything
     if (focusing && escalatedUntil > now.getTime()) return { active: true, reason: 'onitry', strict: true };
     if (mode === 'off') return { active: false, reason: 'off' };
     if (focusing) return { active: true, reason: 'focus', strict: true };
@@ -726,6 +786,7 @@
     courseIndex, courseColor, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
+    breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,

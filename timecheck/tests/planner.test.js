@@ -253,3 +253,59 @@ test('reordering: ids move, orders renumber, "next" goes in front', () => {
   assert.ok(P.nextOrder(tasks, T22) < 5);
   assert.deepEqual(P.queueIds(tasks, T22, { taskId: a.id }), [b.id, c.id]); // the running block isn't queued
 });
+
+// ---------- breaks and the off switch ----------
+
+test('a break or the off switch opens the gate, even in strict modes', () => {
+  const now = new Date(2026, 9, 22, 16, 0);
+  const s = { ...P.DEFAULT_SETTINGS, guardMode: 'always' };
+  assert.equal(P.guardState(s, null, [], now).active, true);
+  assert.equal(P.guardState(s, { title: 'break', kind: 'break' }, [], now).active, false);
+  assert.equal(P.guardState(s, { title: 'x' }, [], now, now.getTime() + 1e6).active, true); // escalated
+  const off = P.guardState(s, { title: 'x' }, [], now, now.getTime() + 1e6, now.getTime() + 60000);
+  assert.equal(off.active, false);
+  assert.equal(off.reason, 'off switch');
+  assert.equal(P.guardState(s, null, [], now, 0, now.getTime() - 1).active, true); // it ran out
+});
+
+test('break budget counts finished breaks today plus the one running', () => {
+  const now = at(15, 0).getTime();
+  const sessions = [
+    { kind: 'break', end: at(10, 0).getTime(), minutes: 20 },
+    { kind: 'focus', end: at(11, 0).getTime(), minutes: 40 },
+    { kind: 'break', end: new Date(2026, 9, 21, 12, 0).getTime(), minutes: 30 }, // yesterday
+  ];
+  const settings = { ...P.DEFAULT_SETTINGS, breakBudget: 45 };
+  assert.equal(P.breakUsed({ sessions, now }), 20);
+  const focus = { kind: 'break', startedAt: at(14, 50).getTime(), endsAt: at(15, 10).getTime(), pausedMs: 0 };
+  assert.equal(P.breakUsed({ sessions, focus, now }), 30); // 10 minutes into it
+  let st = P.breakStatus(settings, { sessions, focus, now });
+  assert.deepEqual([st.used, st.budget, st.left, st.over], [30, 45, 15, false]);
+  st = P.breakStatus(settings, { sessions: sessions.concat({ kind: 'break', end: at(12).getTime(), minutes: 25 }), now });
+  assert.equal(st.over, true);
+  assert.equal(P.breakStatus({ ...settings, breakBudget: 0 }, { now }).over, true);
+});
+
+test('the off-switch code is stored hashed and checked', async () => {
+  assert.equal(P.validCode('1234'), true);
+  assert.equal(P.validCode('123'), false);
+  assert.equal(P.validCode('1234567'), false);
+  assert.equal(P.validCode('12a4'), false);
+  const stored = await P.makeOffCode('4821');
+  assert.ok(!JSON.stringify(stored).includes('4821'));
+  assert.equal(await P.checkOffCode('4821', stored), true);
+  assert.equal(await P.checkOffCode('4822', stored), false);
+  assert.equal(await P.checkOffCode('4821', null), false);
+  const again = await P.makeOffCode('4821');
+  assert.notEqual(again.hash, stored.hash); // fresh salt each time
+});
+
+test('off-switch choices: 15 min, 1 hour, rest of today', () => {
+  const now = at(21, 40).getTime();
+  assert.deepEqual([P.offWindow('15m', now).until - now, P.offWindow('15m', now).pauseMinutes], [15 * 60000, 15]);
+  assert.equal(P.offWindow('1h', now).pauseMinutes, 60);
+  const day = P.offWindow('day', now);
+  assert.equal(day.until, new Date(2026, 9, 23, 0, 0).getTime());
+  assert.equal(day.pauseMinutes, null);
+  assert.equal(P.offWindow('nope', now), null);
+});

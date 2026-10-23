@@ -99,6 +99,7 @@
     state.eod = d[K.eod] || {};
     state.passes = d[K.passes] || {};
     state.escalatedUntil = (d[K.meta] || {}).escalatedUntil || 0;
+    state.offUntil = (d[K.meta] || {}).offUntil || 0;
     state.settings = await P.getSettings();
     state.reviews = d[K.reviews] || {};
     if (!state.onitry) state.onitry = d[K.onitry] || null;
@@ -240,6 +241,8 @@
       bar.append(info, timer, actions);
       const then = P.nextUp(events, nowMin);
       if (then && state.settings.autoAdvance) bar.append(el('div', 'nb-then', `Done starts: ${then.task.title}`));
+      const offT = offHint();
+      if (offT) bar.append(offT);
       document.title = `⏰ Time’s up · ${f.title}`;
       return;
     }
@@ -263,17 +266,18 @@
       actions.append(actionBtn('+5', null, 'ghost', () => send({ type: 'plan:focus', action: 'extend', minutes: 5 }), 'Add 5 minutes'));
       if (f.kind !== 'break') actions.append(actionBtn('Skip', null, 'ghost', () => send({ type: 'plan:focus', action: 'skip' }), 'Move this to the end of today and start the next block'));
       actions.append(actionBtn('Stop', null, 'ghost', () => send({ type: 'plan:focus', action: 'stop', outcome: 'stopped' }), 'End this block and stop the schedule'));
-      // The Break button is Phase 2 (a break with its own timer, open gated sites and Onitry paused): present but hidden until then.
-      const brk = actionBtn('Break', null, 'ghost', () => {}, 'Take a break');
-      brk.hidden = true;
-      brk.id = 'breakBtn';
-      actions.append(brk);
+      if (f.kind !== 'break') {
+        const brk = actionBtn('Break', null, 'ghost', () => breakPanel(brk), 'Take a break: gated sites open and Onitry pauses');
+        actions.append(brk);
+      }
       const progress = el('div', 'nb-progress');
       progress.id = 'focusBar';
       progress.append(el('span'));
       bar.append(info, timer, actions, progress);
       const line = onitryLine(f);
       if (line) bar.append(line);
+      const offH = offHint();
+      if (offH) bar.append(offH);
       const then = P.nextUp(events, nowMin);
       if (then) bar.append(el('div', 'nb-then', `${state.settings.autoAdvance ? 'Then' : 'Next'}: ${then.task.title} · ${P.hhmm(then.start)}`));
       tickTimer();
@@ -292,11 +296,19 @@
       const left = events.filter((e) => e.type === 'task').length; // the whole queue runs from one Start
       const actions = el('div', 'nb-actions');
       actions.append(actionBtn(left > 1 ? `Start (${left} blocks)` : 'Start', 'play', 'primary', () => startTask(next.task), state.settings.autoAdvance ? 'Runs your queue back to back' : ''));
+      const brk = actionBtn('Break', null, '', () => breakPanel(brk), 'Take a break: gated sites open and Onitry pauses');
+      actions.append(brk);
       bar.append(info, actions);
     } else {
       bar.append(el('div', 'nb-empty', 'Nothing queued. Add a block below, then press Start.'));
+      const brk = actionBtn('Break', null, '', () => breakPanel(brk), 'Take a break: gated sites open and Onitry pauses');
+      const row = el('div', 'nb-actions');
+      row.append(brk);
+      bar.append(row);
     }
-    const g = P.guardState(state.settings, null, state.tasks);
+    const offIdle = offHint();
+    if (offIdle) bar.append(offIdle);
+    const g = P.guardState(state.settings, null, state.tasks, new Date(), 0, state.offUntil);
     if (g.active) bar.append(el('div', 'nb-hint', `🛡 Gate is up — ${g.urgent || 'some'} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`));
   }
 
@@ -335,8 +347,86 @@
     document.title = `${f.pausedAt ? '❚❚ ' : ''}${mm}:${ss} · ${f.title}`;
   }
 
-  function startTask(t) {
-    return send({ type: 'plan:focus', action: 'start', taskId: t.id, title: t.title, course: t.course || null, minutes: P.taskMinutes(t, state.settings.focusMinutes), kind: t.kind === 'break' ? 'break' : 'focus' });
+  // Start a block. A break past the day's budget comes back as error 'budget' and asks for the off-switch code.
+  async function startTask(t) {
+    const msg = { type: 'plan:focus', action: 'start', taskId: t.id, title: t.title, course: t.course || null, minutes: P.taskMinutes(t, state.settings.focusMinutes), kind: t.kind === 'break' ? 'break' : 'focus' };
+    const res = await send(msg);
+    if (res && res.error === 'budget') {
+      const a = document.activeElement;
+      breakPanel(a && a !== document.body && document.contains(a) ? a : $('#nowBar'), { task: t });
+    }
+    return res;
+  }
+
+  function breakUsage() {
+    return P.breakStatus(state.settings, { sessions: state.sessions, focus: state.focus });
+  }
+
+  // The Break button: a length (5 to 30 min), today's budget, and the code once the budget is spent.
+  function breakPanel(anchor, { task = null } = {}) {
+    TCMenu.panel({
+      anchor,
+      align: 'end',
+      label: 'Take a break',
+      build(box, done) {
+        box.classList.add('tc-form');
+        const bs = breakUsage();
+        const needCode = !!state.settings.offCode && bs.over;
+        box.append(el('div', 'tc-title', task ? `Start “${task.title}”` : 'Take a break'));
+        let stepper = null;
+        if (!task) {
+          stepper = TCStepper.create({ value: 10, min: 5, max: 30, step: 5, unit: 'min', label: 'Break length' });
+          box.append(stepper.el);
+        }
+        box.append(el('div', needCode ? 'tc-note warn' : 'tc-note', `${bs.used} of ${bs.budget} min used today${bs.over ? ': the budget is spent.' : '.'}`));
+        if (!state.settings.offCode && bs.over) box.append(el('div', 'tc-note', 'Set an off-switch code in ⚙ to make the budget a limit.'));
+        box.append(el('div', 'tc-note', 'Gated sites open and Onitry pauses until it ends.'));
+        if (!task && state.focus && state.focus.kind !== 'break') box.append(el('div', 'tc-note', `“${state.focus.title}” stops and goes back in the queue.`));
+        let code = null;
+        if (needCode) {
+          code = el('input', 'tc-code');
+          code.type = 'password';
+          code.inputMode = 'numeric';
+          code.maxLength = 6;
+          code.autocomplete = 'off';
+          code.placeholder = 'Off-switch code';
+          code.setAttribute('aria-label', 'Off-switch code');
+          box.append(code);
+        }
+        const err = el('div', 'tc-error');
+        err.setAttribute('role', 'alert');
+        const go = el('button', 'btn primary', 'Start break');
+        go.type = 'button';
+        go.addEventListener('click', async () => {
+          err.textContent = '';
+          const res = task
+            ? await send({ type: 'plan:focus', action: 'start', taskId: task.id, title: task.title, course: task.course || null, minutes: P.taskMinutes(task, state.settings.focusMinutes), kind: 'break', code: code ? code.value : null })
+            : await send({ type: 'plan:focus', action: 'start', title: 'Break', kind: 'break', minutes: stepper.value, code: code ? code.value : null });
+          if (res && res.ok) done();
+          else if (res && res.error === 'budget') {
+            err.textContent = res.wrong ? 'That code isn’t right.' : 'Enter your off-switch code to take this break.';
+            if (code) code.focus();
+          } else err.textContent = (res && res.error) || 'Couldn’t start the break.';
+        });
+        box.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.target.closest('button')) go.click();
+        });
+        box.append(err, go);
+        queueMicrotask(() => (code || stepper ? (code || stepper).focus() : go.focus()));
+      },
+    });
+  }
+
+  // "Gate off until 3:40 PM · Turn back on" while the off switch is in use.
+  function offHint() {
+    if (!(state.offUntil > Date.now())) return null;
+    const d = el('div', 'nb-hint nb-off');
+    d.append(el('span', null, `🔓 Gate and Onitry are off until ${P.fmtTime(state.offUntil)}.`));
+    const b = el('button', null, 'Turn back on');
+    b.type = 'button';
+    b.addEventListener('click', () => send({ type: 'plan:offswitch', choice: 'cancel' }));
+    d.append(b);
+    return d;
   }
 
   // ---------- today ----------
@@ -1553,6 +1643,82 @@
   $('#editBlocksBtn').addEventListener('click', () => openBlocksEditor());
   $('#letterChip').addEventListener('click', () => openBlocksEditor());
 
+  // ---------- off-switch code (in settings) ----------
+
+  const offMsg = (text, bad = false) => {
+    const m = $('#offMsg');
+    m.textContent = text;
+    m.classList.toggle('bad', bad);
+  };
+
+  function renderOffSettings() {
+    const has = !!state.settings.offCode;
+    $('#offOldWrap').hidden = !has;
+    $('#offOld').value = '';
+    $('#offNew').value = '';
+    $('#offUse').value = '';
+    $('#offSet').textContent = has ? 'Change code' : 'Set code';
+    $('#offRemove').hidden = !has;
+    $('#offUse').disabled = !has;
+    const bs = breakUsage();
+    $('#breakUsage').textContent = `${bs.used} of ${bs.budget} min used today.${has ? '' : ' Set a code to make the budget a limit.'}`;
+    const box = $('#offChoices');
+    box.textContent = '';
+    for (const c of P.OFF_CHOICES) {
+      const b = el('button', 'btn', c.label);
+      b.type = 'button';
+      b.disabled = !has;
+      b.addEventListener('click', async () => {
+        const res = await send({ type: 'plan:offswitch', code: $('#offUse').value, choice: c.id });
+        if (res && res.ok) {
+          await load();
+          $('#offUse').value = '';
+          offMsg(`Off until ${P.fmtTime(res.until)}.`);
+          renderOffStatus();
+        } else offMsg(res && res.error === 'wrong' ? 'That code isn’t right.' : 'Couldn’t turn it off.', true);
+      });
+      box.append(b);
+    }
+    renderOffStatus();
+    offMsg('');
+  }
+
+  function renderOffStatus() {
+    const on = state.offUntil > Date.now();
+    const box = $('#offStatus');
+    box.textContent = on ? `Gate and Onitry are off until ${P.fmtTime(state.offUntil)}. ` : state.settings.offCode ? 'Enter your code, then pick how long.' : 'Set a code first.';
+    if (on) {
+      const b = el('button', 'chip', 'Turn back on');
+      b.type = 'button';
+      b.addEventListener('click', async () => {
+        await send({ type: 'plan:offswitch', choice: 'cancel' });
+        await load();
+        renderOffStatus();
+      });
+      box.append(b);
+    }
+  }
+
+  $('#offSet').addEventListener('click', async () => {
+    const stored = state.settings.offCode;
+    const next = $('#offNew').value.trim();
+    if (!P.validCode(next)) return offMsg('The code is 4 to 6 digits.', true);
+    if (stored && !(await P.checkOffCode($('#offOld').value.trim(), stored))) return offMsg('The current code isn’t right.', true);
+    await P.setSettings({ offCode: await P.makeOffCode(next) });
+    await load();
+    renderOffSettings();
+    offMsg(stored ? 'Code changed.' : 'Code set.');
+  });
+  $('#offRemove').addEventListener('click', async () => {
+    if (!(await P.checkOffCode($('#offOld').value.trim(), state.settings.offCode))) return offMsg('Enter the current code to remove it.', true);
+    await P.setSettings({ offCode: null });
+    await load();
+    renderOffSettings();
+    offMsg('Code removed.');
+  });
+  // Enter in a code box shouldn't save and close the whole settings dialog.
+  for (const id of ['#offOld', '#offNew', '#offUse']) $(id).addEventListener('keydown', (e) => e.key === 'Enter' && e.preventDefault());
+
   // ---------- settings ----------
 
   function openSettings(focus) {
@@ -1565,6 +1731,8 @@
     f.checkinMinutes.value = s.checkinMinutes;
     f.focusMinutes.value = s.focusMinutes;
     f.autoAdvance.checked = s.autoAdvance;
+    f.breakBudget.value = s.breakBudget;
+    renderOffSettings();
     f.alarmSound.checked = s.alarmSound;
     f.onitryEnabled.checked = s.onitry.enabled;
     f.onitryCode.value = s.onitry.code;
@@ -1695,6 +1863,7 @@
       checkinMinutes: Number(f.checkinMinutes.value) || 0,
       focusMinutes: Number(f.focusMinutes.value) || 40,
       autoAdvance: f.autoAdvance.checked,
+      breakBudget: Math.max(0, Math.min(240, Number(f.breakBudget.value) || 0)),
       alarmSound: f.alarmSound.checked,
       courses: courses.length ? courses : P.DEFAULT_COURSES,
       placement: f.placement.value || 'panel',
