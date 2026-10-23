@@ -5,65 +5,6 @@ require('../lib/planner.js');
 const P = globalThis.InkPlan;
 
 const TODAY = '2026-10-08'; // a Thursday
-const q = (s) => P.parseQuick(s, { today: TODAY });
-
-test('homework with weekday and estimate', () => {
-  const r = q('calc hw due fri 40m');
-  assert.equal(r.title, 'calc hw');
-  assert.equal(r.course, 'Calc');
-  assert.equal(r.kind, 'due');
-  assert.equal(r.due, '2026-10-09');
-  assert.equal(r.estimate, 40);
-});
-
-test('tests are recognized', () => {
-  const r = q('econ test mon');
-  assert.equal(r.kind, 'test');
-  assert.equal(r.course, 'Econ');
-  assert.equal(r.due, '2026-10-12');
-});
-
-test('same weekday means today', () => {
-  assert.equal(q('lang reading thu').due, TODAY);
-});
-
-test('tomorrow and next week', () => {
-  assert.equal(q('spanish quizlet tmrw').due, '2026-10-09');
-  assert.equal(q('chem summative next wed').due, '2026-10-14');
-});
-
-test('month/day formats', () => {
-  assert.equal(q('PSAT 10/14').due, '2026-10-14');
-  assert.equal(q('UWC MUN oct 30').due, '2026-10-30');
-  assert.equal(q('physics frq 2 nov').due, '2026-11-02');
-});
-
-test('undated tasks are planned for today', () => {
-  const r = q('email mrs neri');
-  assert.equal(r.title, 'email mrs neri');
-  assert.equal(r.plan, TODAY);
-  assert.equal(r.due, null);
-});
-
-test('someday items', () => {
-  const r = q('~ cad the dynamic claw 1h');
-  assert.equal(r.someday, true);
-  assert.equal(r.course, 'CAD');
-  assert.equal(r.estimate, 60);
-  assert.equal(r.plan, null);
-});
-
-test('hours and minutes estimate', () => {
-  assert.equal(q('physics frqs 1h30').estimate, 90);
-  assert.equal(q('physics frqs 1.5h').estimate, 90);
-});
-
-test('aliases and hashtags', () => {
-  assert.equal(q('bc quiz fri').course, 'Calc');
-  assert.equal(q('ILS practice').course, 'Spanish');
-  assert.equal(q('reprint tpu part #mate').course, 'MATE');
-  assert.equal(q('reprint tpu part #mate').title, 'reprint tpu part');
-});
 
 test('today list includes due tomorrow and tests within 2 days', () => {
   const tasks = [
@@ -138,17 +79,6 @@ test('schedule text round-trips and finds the current block', () => {
   assert.equal(P.dayInfo('2026-10-12', { ...B, schedule: sched }).blocks[0].label, 'Calc'); // Monday → Other
 });
 
-test('quick add understands letter days but not the article "a"', () => {
-  const o = { today: '2026-10-12', blocks: B };
-  assert.equal(P.parseQuick('calc hw due next B', o).due, '2026-10-16');
-  assert.equal(P.parseQuick('physics test D day', o).due, '2026-10-14');
-  assert.equal(P.parseQuick('econ next a day', o).due, '2026-10-15');
-  const plain = P.parseQuick('work on a project for a day', o);
-  assert.equal(plain.due, null);
-  assert.equal(plain.title, 'work on a project for a day');
-  assert.equal(P.parseQuick('calc hw due next B', { today: '2026-10-12' }).due, null); // blocks off → no guessing
-});
-
 // ---------- escalation & weekly stats ----------
 
 test('Onitry escalation raises the gate during focus, even when off', () => {
@@ -203,21 +133,6 @@ test('breaks expand to dates and collapse back to ranges', () => {
 const T22 = '2026-10-22'; // Thursday
 const at = (h, m = 0) => new Date(2026, 9, 22, h, m);
 
-test('quick add reads times and breaks', () => {
-  const o = { today: T22 };
-  assert.equal(P.parseQuick('econ practice at 4pm 30m', o).at, '16:00');
-  assert.equal(P.parseQuick('chem lab at 16:30', o).at, '16:30');
-  assert.equal(P.parseQuick('physics at 4', o).at, '16:00'); // after school
-  assert.equal(P.parseQuick('call at 9am', o).at, '09:00');
-  assert.equal(P.parseQuick('meet at the library', o).at, null);
-  const b = P.parseQuick('break', o);
-  assert.equal(b.kind, 'break');
-  assert.equal(b.estimate, 10);
-  assert.equal(P.parseQuick('dinner 30m', o).estimate, 30);
-  const tm = P.parseQuick('calc review tmrw at 5pm', o);
-  assert.equal(tm.plan, '2026-10-23');
-});
-
 test('layoutDay runs tasks back to back from now, around classes and pins', () => {
   const tasks = [
     P.makeTask({ title: 'econ', plan: T22, estimate: 30, order: 1 }),
@@ -245,11 +160,6 @@ test('layoutDay: a running (or paused) block pushes the flow back', () => {
   // paused at 15:10, now 15:20 → block now ends 15:40, physics at 15:40
   ev = P.layoutDay({ tasks, focus: { ...focus, pausedAt: at(15, 10).getTime() }, today: T22, now: at(15, 20) });
   assert.equal(ev[1].start, 15 * 60 + 40);
-});
-
-test('lanes split only overlapping events', () => {
-  const ev = P.assignLanes([{ start: 0, end: 30 }, { start: 10, end: 20 }, { start: 40, end: 50 }]);
-  assert.deepEqual(ev.map((e) => [e.lane, e.lanes]), [[0, 2], [1, 2], [0, 1]]);
 });
 
 test('paused and break blocks are not strict focus', () => {
@@ -303,4 +213,43 @@ test('parseBackup rejects what isn’t a backup and accepts the old name', () =>
   assert.equal(P.parseBackup('{"app":"timecheck","data":{"other":1}}').ok, false);
   assert.equal(P.parseBackup('{"app":"onitry-plan","data":{"pl:tasks":[1],"pl:focus":{},"evil":2}}').counts.tasks, 1);
   assert.deepEqual(Object.keys(P.parseBackup('{"app":"onitry-plan","data":{"pl:tasks":[1],"pl:focus":{},"evil":2}}').data), ['pl:tasks']);
+});
+
+// ---------- the queue ----------
+
+test('queue rows number the tasks, route around a class, and keep a set-time block at its time', () => {
+  const tasks = [
+    P.makeTask({ title: 'econ', plan: T22, estimate: 30, order: 1 }),
+    P.makeTask({ title: 'physics', plan: T22, estimate: 30, order: 2 }),
+    P.makeTask({ title: 'call', plan: T22, estimate: 20, at: '17:00', order: 3 }),
+    P.makeTask({ title: 'cad', plan: T22, estimate: 30, order: 4 }),
+  ];
+  const settings = { ...P.DEFAULT_SETTINGS, blocks: { ...B, schedule: { A: [{ start: '15:30', end: '16:00', label: 'Advisory' }], Other: [{ start: '15:30', end: '16:00', label: 'Advisory' }] } } };
+  const rows = P.queueRows({ tasks, settings, today: T22, now: at(15, 2) });
+  const label = (r) => (r.type === 'class' ? `class:${r.block.label}` : r.task.title);
+  // econ 15:02→15:32 would clash with the 15:30 class, so it waits until 16:00.
+  assert.deepEqual(rows.map(label), ['class:Advisory', 'econ', 'physics', 'call', 'cad']);
+  const t = Object.fromEntries(rows.filter((r) => r.task).map((r) => [r.task.title, [r.start, r.end, r.n]]));
+  assert.deepEqual(t.econ, [16 * 60, 16 * 60 + 30, 1]);
+  assert.deepEqual(t.physics, [16 * 60 + 30, 17 * 60, 2]);
+  assert.deepEqual(t.call, [17 * 60, 17 * 60 + 20, 3]); // pinned
+  assert.deepEqual(t.cad, [17 * 60 + 20, 17 * 60 + 50, 4]);
+  // A class after the last block, or one that already ended, is not a row.
+  const later = { ...settings, blocks: { ...B, schedule: { Other: [{ start: '19:00', end: '20:00', label: 'Late' }, { start: '14:00', end: '14:30', label: 'Past' }] } } };
+  assert.ok(!P.queueRows({ tasks, settings: later, today: T22, now: at(15, 2) }).some((r) => r.type === 'class'));
+});
+
+test('reordering: ids move, orders renumber, "next" goes in front', () => {
+  const a = P.makeTask({ title: 'a', plan: T22, order: 5 });
+  const b = P.makeTask({ title: 'b', plan: T22, order: 6 });
+  const c = P.makeTask({ title: 'c', plan: T22, order: 7 });
+  const done = P.makeTask({ title: 'd', plan: T22, order: 1, done: at(9).getTime() });
+  const tasks = [c, a, done, b];
+  const ids = P.queueIds(tasks, T22);
+  assert.deepEqual(ids, [a.id, b.id, c.id]);
+  assert.deepEqual(P.moveId(ids, c.id, 0), [c.id, a.id, b.id]);
+  assert.deepEqual(P.moveId(ids, a.id, 99), [b.id, c.id, a.id]);
+  assert.deepEqual(P.orderFor([c.id, a.id]), { [c.id]: 1, [a.id]: 2 });
+  assert.ok(P.nextOrder(tasks, T22) < 5);
+  assert.deepEqual(P.queueIds(tasks, T22, { taskId: a.id }), [b.id, c.id]); // the running block isn't queued
 });

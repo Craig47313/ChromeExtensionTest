@@ -41,7 +41,6 @@
     s.innerHTML = InkIcons.svg(name, size);
     return s;
   };
-  const qopts = (day = today()) => ({ courses: state.settings.courses, blocks: state.settings.blocks, today: day });
   const send = (msg) => chrome.runtime.sendMessage(msg).catch((e) => ({ ok: false, error: e.message }));
 
   let toastTimer = 0;
@@ -126,6 +125,7 @@
     applyTheme();
     renderClock();
     renderToday();
+    renderAddRow();
     renderNow();
     renderWeek();
     renderSomeday();
@@ -260,9 +260,14 @@
       else actions.append(actionBtn('Pause', 'pause', '', () => send({ type: 'plan:focus', action: 'pause' }), 'Pause the timer (and Onitry)'));
       if (f.kind !== 'break') actions.append(actionBtn('Done', 'check', f.pausedAt ? '' : 'primary', () => send({ type: 'plan:focus', action: 'done' }), state.settings.autoAdvance ? 'Done — start the next block' : 'Done'));
       else actions.append(actionBtn('End break', 'check', 'primary', () => send({ type: 'plan:focus', action: 'done' })));
-      actions.append(actionBtn('+10', null, 'ghost', () => send({ type: 'plan:focus', action: 'extend', minutes: 10 }), 'Add 10 minutes'));
+      actions.append(actionBtn('+5', null, 'ghost', () => send({ type: 'plan:focus', action: 'extend', minutes: 5 }), 'Add 5 minutes'));
       if (f.kind !== 'break') actions.append(actionBtn('Skip', null, 'ghost', () => send({ type: 'plan:focus', action: 'skip' }), 'Move this to the end of today and start the next block'));
       actions.append(actionBtn('Stop', null, 'ghost', () => send({ type: 'plan:focus', action: 'stop', outcome: 'stopped' }), 'End this block and stop the schedule'));
+      // The Break button is Phase 2 (a break with its own timer, open gated sites and Onitry paused): present but hidden until then.
+      const brk = actionBtn('Break', null, 'ghost', () => {}, 'Take a break');
+      brk.hidden = true;
+      brk.id = 'breakBtn';
+      actions.append(brk);
       const progress = el('div', 'nb-progress');
       progress.id = 'focusBar';
       progress.append(el('span'));
@@ -284,12 +289,12 @@
       const chip = courseChip(next.task.course);
       if (chip) top.append(chip);
       info.append(top, el('div', 'nb-title', next.task.title));
-      const left = events.filter((e) => e.type === 'task').length;
+      const left = events.filter((e) => e.type === 'task').length; // the whole queue runs from one Start
       const actions = el('div', 'nb-actions');
-      actions.append(actionBtn(left > 1 ? `Start (${left} blocks)` : 'Start', 'play', 'primary', () => startTask(next.task), state.settings.autoAdvance ? 'Runs your schedule back to back' : ''));
+      actions.append(actionBtn(left > 1 ? `Start (${left} blocks)` : 'Start', 'play', 'primary', () => startTask(next.task), state.settings.autoAdvance ? 'Runs your queue back to back' : ''));
       bar.append(info, actions);
     } else {
-      bar.append(el('div', 'nb-empty', 'Nothing scheduled. Add something above — it goes straight onto your schedule.'));
+      bar.append(el('div', 'nb-empty', 'Nothing queued. Add a block below, then press Start.'));
     }
     const g = P.guardState(state.settings, null, state.tasks);
     if (g.active) bar.append(el('div', 'nb-hint', `🛡 Gate is up — ${g.urgent || 'some'} thing${g.urgent === 1 ? '' : 's'} due by tomorrow${g.reason === 'free block' ? ' and you’re in a free block' : ''}.`));
@@ -333,55 +338,6 @@
   function startTask(t) {
     return send({ type: 'plan:focus', action: 'start', taskId: t.id, title: t.title, course: t.course || null, minutes: P.taskMinutes(t, state.settings.focusMinutes), kind: t.kind === 'break' ? 'break' : 'focus' });
   }
-
-  // ---------- quick add ----------
-
-  const quick = $('#quickAdd');
-  function previewQuick() {
-    const lines = quick.value.split('\n').map((l) => l.trim()).filter(Boolean);
-    const box = $('#quickPreview');
-    box.textContent = '';
-    quick.style.height = 'auto';
-    quick.style.height = `${Math.min(quick.scrollHeight, 200)}px`;
-    if (!lines.length) return;
-    if (lines.length > 1) {
-      box.append(el('span', 'pv', `Enter adds ${lines.length} tasks`));
-      return;
-    }
-    const r = P.parseQuick(lines[0], qopts());
-    const c = courseChip(r.course);
-    if (c) box.append(c);
-    if (r.someday) box.append(el('span', 'pv', '“nothing to do” list'));
-    else if (r.due) box.append(el('span', `pv ${r.kind === 'test' ? 'test' : ''}`, `${r.kind === 'test' ? 'test' : 'due'} ${P.relDay(r.due)}`));
-    else box.append(el('span', 'pv', 'today'));
-    if (r.estimate) box.append(el('span', 'pv', P.fmtMinutes(r.estimate)));
-    if (r.kind === 'break') box.append(el('span', 'pv', 'break'));
-    // Where it lands on today's schedule.
-    if (r.plan === today() && !r.someday) {
-      const probe = P.makeTask({ ...r, id: '__probe', order: Date.now() + 1e6 });
-      const ev = P.layoutDay({ tasks: state.tasks.concat(probe), focus: state.focus, sessions: [], settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes }).find((e) => e.task && e.task.id === '__probe');
-      if (ev) box.append(el('span', 'pv slot', `→ ${P.hhmm(ev.start)}–${P.hhmm(ev.end)}${r.at ? ' 📌' : ''}`));
-    }
-  }
-  quick.addEventListener('input', previewQuick);
-  quick.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter' || e.shiftKey) return;
-    e.preventDefault();
-    const lines = quick.value.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) return;
-    const base = Date.now();
-    const tasks = lines.map((line, i) => P.makeTask({ ...P.parseQuick(line, qopts()), order: base + i }));
-    await P.addTasks(tasks);
-    quick.value = '';
-    previewQuick();
-    toast(tasks.length === 1 ? `Added “${tasks[0].title}”` : `Added ${tasks.length} tasks`, {
-      action: 'Undo',
-      onAction: async () => {
-        const ids = new Set(tasks.map((t) => t.id));
-        await P.store.update(K.tasks, [], (all) => all.filter((t) => !ids.has(t.id)));
-      },
-    });
-  });
 
   // ---------- today ----------
 
@@ -445,60 +401,246 @@
     }
   }
 
-  // ---------- today: the schedule ----------
+  // ---------- today: the queue ----------
 
-  const PX = 1.1; // pixels per minute (66px an hour)
-  const SNAP = 5;
   let layoutCache = [];
-  let scrolledToNow = false;
 
   function computeLayout() {
     layoutCache = P.layoutDay({ tasks: state.tasks, focus: state.focus, sessions: state.sessions, settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes });
     return layoutCache;
   }
 
-  const hm24 = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(Math.round(min) % 60).padStart(2, '0')}`;
-  const snap = (min) => Math.round(min / SNAP) * SNAP;
+  const hm24 = (min) => TCStepper.clock.format(min);
+  const SET_TIME_STEP = 5;
+
+  // Task rows in the order they are on screen (classes are not in the queue).
+  const queueTaskIds = () => $$('#queue .q-task').map((li) => li.dataset.id);
+
+  async function writeOrder(ids) {
+    const orders = P.orderFor(ids);
+    await P.store.update(K.tasks, [], (all) => all.map((t) => (orders[t.id] != null ? { ...t, order: orders[t.id] } : t)));
+  }
+
+  function moveRow(id, to) {
+    return writeOrder(P.moveId(queueTaskIds(), id, to));
+  }
+
+  async function removeWithUndo(t) {
+    await P.removeTask(t.id);
+    toast(`Removed “${t.title}”`, { action: 'Undo', onAction: () => P.addTasks([t]) });
+  }
+
+  async function duplicateTask(t) {
+    const ids = P.queueIds(state.tasks, today(), state.focus);
+    const nextId = ids[ids.indexOf(t.id) + 1];
+    const next = state.tasks.find((x) => x.id === nextId);
+    const order = next ? (t.order + next.order) / 2 : t.order + 1;
+    await P.addTasks([P.makeTask({ ...t, id: undefined, order, at: null, done: null, created: Date.now() })]);
+    toast(`Duplicated “${t.title}”`);
+  }
+
+  // "Start at a set time…": a small panel with an hh:mm stepper.
+  function openSetTime(anchor, t, ev) {
+    TCMenu.panel({
+      anchor,
+      align: 'end',
+      label: 'Start at a set time',
+      build(box, done) {
+        box.classList.add('tc-form');
+        box.append(el('div', 'tc-title', 'Start at a set time'));
+        const stepper = TCStepper.create({ value: ev ? Math.round(ev.start / SET_TIME_STEP) * SET_TIME_STEP : 9 * 60, min: 0, max: 23 * 60 + 55, step: SET_TIME_STEP, format: TCStepper.clock.format, parse: TCStepper.clock.parse, label: 'Start time (hh:mm)' });
+        const row = el('div', 'tc-row');
+        const set = el('button', 'btn primary', 'Set');
+        set.type = 'button';
+        set.addEventListener('click', async () => {
+          done();
+          await P.updateTask(t.id, { at: hm24(stepper.value), plan: today() });
+          toast(`“${t.title}” starts at ${P.hhmm(stepper.value)}`);
+        });
+        row.append(stepper.el, set);
+        if (t.at) {
+          const clear = el('button', 'btn', 'Let it flow');
+          clear.type = 'button';
+          clear.addEventListener('click', () => {
+            done();
+            P.updateTask(t.id, { at: null });
+          });
+          row.append(clear);
+        }
+        box.append(row);
+        stepper.input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') set.click();
+        });
+        queueMicrotask(() => stepper.focus());
+      },
+    });
+  }
+
+  function rowMenu(anchor, t, ev) {
+    const ids = queueTaskIds();
+    const i = ids.indexOf(t.id);
+    TCMenu.open({
+      anchor,
+      align: 'end',
+      label: `${t.title} options`,
+      items: [
+        { label: 'Edit', onSelect: () => openEdit(t.id) },
+        { label: 'Start now', onSelect: () => startTask(t) },
+        { sep: true },
+        { label: 'Move to top', disabled: i <= 0, onSelect: () => moveRow(t.id, 0) },
+        { label: 'Move to bottom', disabled: i < 0 || i === ids.length - 1, onSelect: () => moveRow(t.id, ids.length) },
+        { label: 'Start at a set time…', onSelect: () => openSetTime(anchor, t, ev) },
+        { sep: true },
+        { label: 'Duplicate', onSelect: () => duplicateTask(t) },
+        { label: 'Remove', danger: true, onSelect: () => removeWithUndo(t) },
+      ],
+    });
+  }
+
+  // Drag a row by its handle (or press ↑ ↓ on the handle) to change its place in the queue.
+  function startRowDrag(e, li) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const grip = e.currentTarget;
+    grip.setPointerCapture(e.pointerId);
+    const rows = $$('#queue .q-task').filter((r) => r !== li);
+    const y0 = e.clientY;
+    const mid = (r) => {
+      const b = r.getBoundingClientRect();
+      return b.top + b.height / 2;
+    };
+    const home = mid(li);
+    const mids = rows.map(mid);
+    let to = rows.length ? queueTaskIds().indexOf(li.dataset.id) : 0;
+    li.classList.add('dragging');
+    const mark = () => {
+      rows.forEach((r, i) => {
+        r.classList.toggle('drop-before', i === to);
+        r.classList.toggle('drop-after', to === rows.length && i === rows.length - 1);
+      });
+    };
+    const onMove = (m) => {
+      const dy = m.clientY - y0;
+      li.style.transform = `translateY(${dy}px)`;
+      to = mids.filter((y) => y < home + dy).length;
+      mark();
+    };
+    const onUp = async (u) => {
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onUp);
+      grip.removeEventListener('pointercancel', onUp);
+      li.classList.remove('dragging');
+      li.style.transform = '';
+      rows.forEach((r) => r.classList.remove('drop-before', 'drop-after'));
+      if (u.type === 'pointercancel' || Math.abs(u.clientY - y0) < 4) return;
+      await moveRow(li.dataset.id, to);
+    };
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', onUp);
+    grip.addEventListener('pointercancel', onUp);
+  }
+
+  // Writes of the inline length stepper are batched so wheel-scrolling doesn't redraw the list on every tick.
+  const lengthWrites = new Map();
+  function setLength(id, minutes) {
+    clearTimeout(lengthWrites.get(id));
+    lengthWrites.set(
+      id,
+      setTimeout(() => {
+        lengthWrites.delete(id);
+        P.updateTask(id, { estimate: minutes });
+      }, 350)
+    );
+  }
+
+  function queueRow(ev, nextId) {
+    const t = ev.task;
+    const li = el('li', 'q-row q-task');
+    li.dataset.id = t.id;
+    if (t.course) li.style.setProperty('--c', P.courseColor(state.settings.courses, t.course));
+    li.classList.toggle('break', t.kind === 'break');
+    li.classList.toggle('pinned', !!ev.pinned);
+    li.classList.toggle('late', !!(t.due && t.due < today()));
+    li.classList.toggle('next', t.id === nextId && !state.focus);
+
+    const grip = el('button', 'q-grip', '⋮⋮');
+    grip.type = 'button';
+    grip.title = 'Drag to reorder (or press ↑ ↓)';
+    grip.setAttribute('aria-label', `Reorder ${t.title}`);
+    grip.addEventListener('pointerdown', (e) => startRowDrag(e, li));
+    grip.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      const ids = queueTaskIds();
+      const i = ids.indexOf(t.id);
+      const to = i + (e.key === 'ArrowUp' ? -1 : 1);
+      if (to >= 0 && to < ids.length) moveRow(t.id, to);
+    });
+    li.append(grip, el('span', 'q-num', String(ev.n)));
+
+    const body = el('div', 'q-body');
+    const title = el('button', 'q-title', t.title);
+    title.type = 'button';
+    title.title = 'Edit';
+    title.addEventListener('click', () => openEdit(t.id));
+    const meta = el('div', 'q-meta');
+    meta.append(el('span', 'q-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}`));
+    if (ev.pinned) {
+      const pin = el('span', 'q-pin', '📌');
+      pin.title = `Starts at ${P.hhmm(ev.start)}`;
+      meta.append(pin);
+    }
+    const chip = courseChip(t.course);
+    if (chip) meta.append(chip);
+    const due = dueLabel(t);
+    if (due) meta.append(due);
+    if (t.kind === 'break') meta.append(el('span', 'q-kind', 'break'));
+    body.append(title, meta);
+
+    const len = TCStepper.create({ value: P.taskMinutes(t, state.settings.focusMinutes), min: 5, max: 240, step: 5, unit: 'min', label: `Length of ${t.title}`, onChange: (v) => setLength(t.id, v) });
+    len.el.classList.add('q-step');
+    const more = el('button', 'icon-btn small q-more', '⋮');
+    more.type = 'button';
+    more.title = 'More';
+    more.setAttribute('aria-label', `Options for ${t.title}`);
+    more.setAttribute('aria-haspopup', 'menu');
+    more.addEventListener('click', () => rowMenu(more, t, ev));
+    li.append(body, len.el, more);
+    li.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('input')) return;
+      e.preventDefault();
+      rowMenu({ x: e.clientX, y: e.clientY }, t, ev);
+    });
+    return li;
+  }
+
+  function classRow(ev) {
+    const li = el('li', 'q-class');
+    const c = state.settings.courses.find((x) => x.name.toLowerCase() === String(ev.block.label || '').toLowerCase());
+    if (c) li.style.setProperty('--c', c.color);
+    li.classList.toggle('free', ev.free);
+    li.textContent = `${ev.block.label} · ${P.hhmm(ev.start)}–${P.hhmm(ev.end)} · ${ev.free ? 'free block' : 'class'}`;
+    li.title = ev.free ? 'Free block: tasks can go here' : 'Class: the queue skips past it';
+    return li;
+  }
 
   function renderToday() {
     const events = computeLayout();
-    // Classes get their own rail; everything else shares lanes only with itself.
-    P.assignLanes(events.filter((e) => e.type !== 'class'));
-    const nowMin = nowMinutes();
+    const rows = P.queueRows({ tasks: state.tasks, focus: state.focus, sessions: [], settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes });
+    const tasksAhead = rows.filter((r) => r.type === 'task');
     const list = P.todayTasks(state.tasks, today());
     const done = list.filter((t) => t.done);
-    const tasksAhead = events.filter((e) => e.type === 'task');
 
-    // Visible range: the whole day's events plus a bit of room around now.
-    const starts = events.map((e) => e.start).concat(nowMin - 60);
-    const ends = events.map((e) => e.end).concat(nowMin + 180);
-    const startH = Math.max(0, Math.floor(Math.min(...starts) / 60));
-    const endH = Math.min(24, Math.ceil(Math.max(...ends) / 60 + 0.5));
-    const top = (min) => (min - startH * 60) * PX;
-
-    const cal = $('#cal');
-    const inner = $('#calInner');
-    inner.textContent = '';
-    inner.style.height = `${(endH - startH) * 60 * PX}px`;
-    inner.dataset.start = String(startH * 60);
-    inner.classList.toggle('has-classes', events.some((e) => e.type === 'class'));
-    for (let h = startH; h <= endH; h++) {
-      const line = el('div', 'cal-hour');
-      line.style.top = `${top(h * 60)}px`;
-      if (h < endH) line.append(el('span', null, P.hhmm(h * 60).replace(':00', '')));
-      inner.append(line);
-    }
-
-    for (const ev of events) inner.append(eventEl(ev, top, nowMin, tasksAhead[0]));
-
-    if (nowMin >= startH * 60 && nowMin <= endH * 60) {
-      const line = el('div', 'cal-now');
-      line.style.top = `${top(nowMin)}px`;
-      inner.append(line);
-    }
-    if (!scrolledToNow && cal.clientHeight) {
-      cal.scrollTop = Math.max(0, top(nowMin) - cal.clientHeight * 0.25);
-      scrolledToNow = true;
+    // The length steppers redraw with the list; keep focus in the one being used.
+    const active = document.activeElement;
+    const focusId = active && active.closest && active.closest('#queue .q-step') ? active.closest('.q-row').dataset.id : null;
+    const queue = $('#queue');
+    queue.textContent = '';
+    const nextId = (P.nextUp(events, nowMinutes()) || { task: {} }).task.id;
+    for (const r of rows) queue.append(r.type === 'class' ? classRow(r) : queueRow(r, nextId));
+    if (focusId) {
+      const input = $(`#queue .q-row[data-id="${CSS.escape(focusId)}"] .tc-step-val`);
+      if (input) input.focus();
     }
 
     // Footer: how long the plan runs.
@@ -514,7 +656,7 @@
         foot.classList.add('warn');
         foot.append(el('span', 'over', ' — past your cutoff. Cut or move something.'));
       }
-    } else foot.append(el('span', null, done.length ? 'All done for today. 🎉' : 'Type above to add blocks. Click an empty spot on the calendar to add one at that time.'));
+    } else foot.append(el('span', null, done.length ? 'All done for today. 🎉' : 'Nothing queued yet. Add your first block below.'));
 
     $('#todayMeta').textContent = list.length ? `${done.length}/${list.length} done` : '';
     const doneBox = $('#doneToday');
@@ -524,11 +666,11 @@
     dl.textContent = '';
     for (const t of done) dl.append(taskRow(t));
 
-    renderBlocks();
-
-    // Heads-up: tests in the next 3 days and anything overdue.
+    // Heads-up: tests in the next 3 days, anything overdue, and a school break.
     const hu = $('#headsUp');
     hu.textContent = '';
+    const b = state.settings.blocks;
+    if (b.enabled && b.skip.includes(today())) hu.append(el('div', 'hu', '🏖 No school today. The rotation is paused.'));
     const soonTests = state.tasks.filter((t) => !t.done && t.kind === 'test' && t.due && P.daysBetween(today(), t.due) >= 0 && P.daysBetween(today(), t.due) <= 3);
     const late = P.overdue(state.tasks, today());
     for (const t of soonTests) {
@@ -543,170 +685,212 @@
     }
   }
 
-  function courseFor(label) {
-    const l = String(label || '').toLowerCase();
-    return state.settings.courses.find((c) => c.name.toLowerCase() === l || (c.aliases || []).includes(l));
+  $('#schoolLink').addEventListener('click', () => openBlocksEditor());
+
+  // ---------- the add row (under the list) ----------
+
+  const add = { due: null, at: null, free: false };
+  const defaultLen = () => (typeDrop.value === 'break' ? 10 : state.settings.focusMinutes);
+  let lastDefault = 30;
+  const lenStep = TCStepper.create({ value: 30, min: 5, max: 240, step: 5, unit: 'min', label: 'Length' });
+  $('#arLen').append(lenStep.el);
+  const typeDrop = TCMenu.dropdown({
+    options: [{ value: 'focus', label: 'Focus' }, { value: 'break', label: 'Break' }],
+    value: 'focus',
+    label: 'Type',
+    onChange: () => {
+      // Swap between the focus and break defaults unless the length was set by hand.
+      if (lenStep.value === lastDefault) lenStep.set(defaultLen(), { silent: true });
+      lastDefault = defaultLen();
+    },
+  });
+  $('#arType').append(typeDrop.el);
+  const subjectDrop = TCMenu.dropdown({ options: [{ value: '', label: 'No subject' }], value: '', label: 'Subject', extra: [{ label: 'Add subject…', onSelect: () => openSettings('courses') }] });
+  $('#arSubject').append(subjectDrop.el);
+
+  function subjectOptions() {
+    return [{ value: '', label: 'No subject' }, ...state.settings.courses.map((c) => ({ value: c.name, label: c.name, color: c.color }))];
   }
 
-  function eventEl(ev, top, nowMin, firstAhead) {
-    const len = ev.end - ev.start;
-    const node = el('div', `ev ev-${ev.type}`);
-    node.style.top = `${top(ev.start)}px`;
-    node.style.height = `${Math.max(20, len * PX - 2)}px`;
-    node.style.setProperty('--lane', ev.lane || 0);
-    node.style.setProperty('--lanes', ev.lanes || 1);
-    node.dataset.start = String(ev.start);
-    if (len * PX < 44) node.classList.add('short');
-    const time = el('span', 'ev-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}`);
-
-    if (ev.type === 'class') {
-      const c = courseFor(ev.block.label);
-      if (c) node.style.setProperty('--c', c.color);
-      node.classList.toggle('free', ev.free);
-      node.classList.toggle('past', ev.end <= nowMin);
-      node.append(el('span', 'ev-title', ev.block.label), time);
-      node.title = `${ev.block.label} · ${ev.block.start}–${ev.block.end}${ev.free ? ' · free block: tasks can go here' : ''}`;
-      node.addEventListener('click', () => openBlocksEditor());
-      return node;
-    }
-    if (ev.type === 'session') {
-      const s = ev.session;
-      if (s.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, s.course));
-      node.classList.toggle('break', s.kind === 'break');
-      const mark = s.outcome === 'done' ? '✓ ' : '';
-      node.append(el('span', 'ev-title', `${mark}${s.title}`), el('span', 'ev-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}${s.onitry && s.onitry.onPct != null ? ` · ${s.onitry.onPct}% on task` : ''}`));
-      node.title = `${s.title} — ${s.outcome}, ${P.fmtMinutes(s.minutes)}`;
-      return node;
-    }
-    if (ev.type === 'focus') {
-      const f = ev.focus;
-      if (f.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, f.course));
-      node.classList.toggle('break', f.kind === 'break');
-      node.classList.toggle('paused', !!f.pausedAt);
-      const up = f.timeUpAt || (!f.pausedAt && f.endsAt <= Date.now());
-      node.classList.toggle('timeup', !!up);
-      node.append(el('span', 'ev-title', f.title), el('span', 'ev-time', up ? '⏰ Time’s up' : f.pausedAt ? 'Paused' : `Now · until ${P.hhmm(ev.end)}`));
-      return node;
-    }
-
-    // A task block: draggable to pin a time, resizable to change its length.
-    const t = ev.task;
-    node.dataset.id = t.id;
-    if (t.course) node.style.setProperty('--c', P.courseColor(state.settings.courses, t.course));
-    node.classList.toggle('break', t.kind === 'break');
-    node.classList.toggle('pinned', !!ev.pinned);
-    node.classList.toggle('late', !!(t.due && t.due < today()));
-    node.classList.toggle('next', ev === firstAhead && !state.focus);
-    const head = el('div', 'ev-head');
-    const box = el('input');
-    box.type = 'checkbox';
-    box.title = 'Mark done';
-    box.addEventListener('change', () => toggleDone(t, box.checked));
-    const title = el('button', 'ev-title', t.title);
-    title.type = 'button';
-    title.title = 'Edit';
-    title.addEventListener('click', () => openEdit(t.id));
-    head.append(box, title);
-    const tools = el('div', 'ev-tools');
-    if (ev.pinned) {
-      const pin = el('button', 'ev-pin', '📌');
-      pin.type = 'button';
-      pin.title = `Pinned at ${P.hhmm(ev.start)}. Click to let it flow with the rest.`;
-      pin.addEventListener('click', () => P.updateTask(t.id, { at: null }));
-      tools.append(pin);
-    }
-    const play = el('button', 'ev-play');
-    play.type = 'button';
-    play.title = t.kind === 'break' ? 'Start this break' : 'Start this block';
-    play.innerHTML = InkIcons.svg('play', 14);
-    play.addEventListener('click', () => startTask(t));
-    tools.append(play);
-    head.append(tools);
-    const meta = el('div', 'ev-meta');
-    meta.append(time, el('span', 'ev-len', P.fmtMinutes(len)));
-    const due = dueLabel(t);
-    if (due && !node.classList.contains('short')) meta.append(due);
-    node.title = `${t.title} · ${P.hhmm(ev.start)}–${P.hhmm(ev.end)} (${P.fmtMinutes(len)})${ev.pinned ? ' · pinned' : ''}\nDrag to move, drag the bottom edge to resize`;
-    const grip = el('div', 'ev-resize');
-    grip.title = 'Drag to change how long';
-    node.append(head, meta, grip);
-    node.addEventListener('pointerdown', (e) => startDrag(e, node, ev));
-    return node;
-  }
-
-  // Drag a block to pin it at a time (5-minute snaps); drag its bottom edge to resize.
-  function startDrag(e, node, ev) {
-    if (e.button !== 0 || e.target.closest('input, .ev-tools')) return;
-    const resizing = e.target.classList.contains('ev-resize');
-    const y0 = e.clientY;
-    const len0 = ev.end - ev.start;
-    let moved = false;
-    let value = null;
-    const label = node.querySelector('.ev-time');
-    const onMove = (m) => {
-      const dy = m.clientY - y0;
-      if (!moved && Math.abs(dy) < 4) return;
-      if (!moved) {
-        moved = true;
-        node.classList.add(resizing ? 'resizing' : 'dragging');
-        node.setPointerCapture(e.pointerId);
-      }
-      if (resizing) {
-        value = Math.max(SNAP, snap(len0 + dy / PX));
-        node.style.height = `${Math.max(20, value * PX - 2)}px`;
-        label.textContent = `${P.hhmm(ev.start)}–${P.hhmm(ev.start + value)}`;
-      } else {
-        value = Math.max(0, Math.min(24 * 60 - len0, snap(ev.start + dy / PX)));
-        node.style.transform = `translateY(${(value - ev.start) * PX}px)`;
-        label.textContent = `${P.hhmm(value)}–${P.hhmm(value + len0)}`;
-      }
+  function renderAddRow() {
+    const cur = subjectDrop.value;
+    subjectDrop.set(state.settings.courses.some((c) => c.name === cur) ? cur : '', subjectOptions());
+    if (lenStep.value === lastDefault && document.activeElement !== lenStep.input) lenStep.set(defaultLen(), { silent: true });
+    lastDefault = defaultLen();
+    const tags = $('#arTags');
+    tags.textContent = '';
+    const tag = (text, clear) => {
+      const b = el('button', 'ar-tag', `${text} ✕`);
+      b.type = 'button';
+      b.title = 'Remove';
+      b.addEventListener('click', () => {
+        clear();
+        renderAddRow();
+      });
+      tags.append(b);
     };
-    const onUp = async () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (!moved) return;
-      // A drag that started on the title shouldn't also count as a click (which opens edit).
-      const eat = (c) => {
-        c.stopPropagation();
-        c.preventDefault();
-      };
-      window.addEventListener('click', eat, { capture: true, once: true });
-      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 0);
-      if (value == null) return;
-      if (resizing) await P.updateTask(ev.task.id, { estimate: value });
-      else {
-        await P.updateTask(ev.task.id, { at: hm24(value), plan: today() });
-        toast(`Pinned “${ev.task.title}” at ${P.hhmm(value)}`, { action: 'Undo', onAction: () => P.updateTask(ev.task.id, { at: ev.pinned ? ev.task.at : null }) });
-      }
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    if (add.free) tag('Free time', () => (add.free = false));
+    if (add.due) tag(`Due ${P.relDay(add.due)}`, () => (add.due = null));
+    if (add.at) tag(`Starts ${P.hhmm(add.at)}`, () => (add.at = null));
+    $('#arMore').firstChild.textContent = add.free || add.due || add.at ? 'More •' : 'More';
   }
 
-  // Click an empty spot: start a quick add pinned at that time.
-  $('#calInner').addEventListener('click', (e) => {
-    if (e.target !== e.currentTarget && !e.target.classList.contains('cal-hour')) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const min = snap(Number(e.currentTarget.dataset.start) + (e.clientY - r.top) / PX);
-    quick.value = ` at ${hm24(min)}`;
-    quick.focus();
-    quick.setSelectionRange(0, 0);
-    previewQuick();
-    quick.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Due date choices: today, tomorrow, the next A/B/C/D day (when the rotation is on), or a date.
+  function dueChoices() {
+    const out = [{ value: '', label: 'No due date' }, { value: today(), label: 'Today' }, { value: P.addDays(today(), 1), label: 'Tomorrow' }];
+    const b = state.settings.blocks;
+    if (b.enabled) {
+      for (const L of b.letters) {
+        const d = P.nextLetterDate(L, P.addDays(today(), 1), b);
+        if (d) out.push({ value: d, label: `Next ${L} day · ${P.fromKey(d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}` });
+      }
+    }
+    return out;
+  }
+
+  function openMore() {
+    const btn = $('#arMore');
+    btn.setAttribute('aria-expanded', 'true');
+    TCMenu.panel({
+      anchor: btn,
+      label: 'More options',
+      onClose: () => btn.setAttribute('aria-expanded', 'false'),
+      build(box) {
+        box.classList.add('tc-form');
+        const sec = (title) => box.append(el('div', 'tc-title', title));
+
+        sec('Due date');
+        const choices = dueChoices();
+        const sel = el('select', 'tc-select');
+        for (const c of choices) sel.append(new Option(c.label, c.value));
+        const date = el('input', 'tc-date');
+        date.type = 'date';
+        date.setAttribute('aria-label', 'Pick a date');
+        const matches = choices.find((c) => c.value === (add.due || ''));
+        sel.value = matches ? matches.value : '';
+        date.value = add.due && !matches ? add.due : '';
+        sel.addEventListener('change', () => {
+          add.due = sel.value || null;
+          date.value = '';
+          if (add.due) add.free = false;
+          renderAddRow();
+        });
+        date.addEventListener('change', () => {
+          add.due = date.value || null;
+          if (add.due) add.free = false;
+          sel.value = '';
+          renderAddRow();
+        });
+        box.append(el('div', 'tc-row'));
+        box.lastChild.append(sel, date);
+
+        sec('Start at a set time');
+        const row = el('div', 'tc-row');
+        const stepper = TCStepper.create({ value: add.at ? P.minutesOfDay(add.at) : 16 * 60, min: 0, max: 23 * 60 + 55, step: SET_TIME_STEP, format: TCStepper.clock.format, parse: TCStepper.clock.parse, label: 'Start time (hh:mm)', onChange: () => useTime() });
+        const useTime = () => {
+          add.at = hm24(stepper.value);
+          add.free = false;
+          renderAddRow();
+        };
+        const setBtn = el('button', 'btn', add.at ? 'Update' : 'Set');
+        setBtn.type = 'button';
+        setBtn.addEventListener('click', () => {
+          useTime();
+          setBtn.textContent = 'Update';
+        });
+        row.append(stepper.el, setBtn);
+        box.append(row);
+
+        sec('Or');
+        const free = el('label', 'tc-check');
+        const cb = el('input');
+        cb.type = 'checkbox';
+        cb.checked = add.free;
+        cb.addEventListener('change', () => {
+          add.free = cb.checked;
+          if (add.free) {
+            add.due = null;
+            add.at = null;
+            sel.value = '';
+            date.value = '';
+          }
+          renderAddRow();
+        });
+        free.append(cb, el('span', null, 'Put in Free time instead of today’s queue'));
+        box.append(free);
+      },
+    });
+  }
+  $('#arMore').addEventListener('click', () => {
+    if ($('#arMore').getAttribute('aria-expanded') === 'true') TCMenu.close();
+    else openMore();
   });
 
-  function renderBlocks() {
-    const strip = $('#blockStrip');
-    strip.textContent = '';
-    const b = state.settings.blocks;
-    if (!b.enabled || P.dayInfo(today(), b).blocks.length) return;
-    const hasAny = Object.values(b.schedule || {}).some((l) => l && l.length);
-    const onBreak = b.skip.includes(today());
-    if (onBreak || !hasAny) {
-      const setup = el('button', 'blk-setup', onBreak ? '🏖 No school today. The rotation is paused.' : '+ Add your class blocks');
-      setup.type = 'button';
-      strip.append(setup);
+  function newBlock(title, order) {
+    const kind = typeDrop.value === 'break' ? 'break' : add.due ? 'due' : 'todo';
+    return P.makeTask({
+      title,
+      course: subjectDrop.value || null,
+      kind,
+      due: add.free ? null : add.due,
+      plan: add.free ? null : add.due && !add.at ? null : add.due || today(),
+      at: add.free ? null : add.at,
+      someday: add.free,
+      estimate: lenStep.value,
+      order,
+    });
+  }
+
+  async function addBlocks(titles, asNext) {
+    if (!titles.length) return;
+    const first = asNext ? P.nextOrder(state.tasks, today(), state.focus) - titles.length : Date.now();
+    const tasks = titles.map((title, i) => newBlock(title, first + i));
+    await P.addTasks(tasks);
+    $('#arName').value = '';
+    Object.assign(add, { due: null, at: null, free: false });
+    renderAddRow();
+    const later = tasks.length === 1 && tasks[0].due && tasks[0].due > P.addDays(today(), 1);
+    toast(tasks.length > 1 ? `Added ${tasks.length} blocks` : later ? `Added “${tasks[0].title}” for ${P.relDay(tasks[0].due)}. Find it in Week.` : `Added “${tasks[0].title}”`, {
+      action: 'Undo',
+      onAction: async () => {
+        const ids = new Set(tasks.map((t) => t.id));
+        await P.store.update(K.tasks, [], (all) => all.filter((t) => !ids.has(t.id)));
+      },
+    });
+  }
+
+  function submitAdd(asNext) {
+    const title = $('#arName').value.trim();
+    if (!title) {
+      $('#arName').focus();
+      return;
     }
+    return addBlocks([title], asNext);
+  }
+  $('#arAdd').addEventListener('click', (e) => submitAdd(e.shiftKey));
+  $('#addRow').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.closest('.tc-drop, button, .tc-menu')) return;
+    e.preventDefault();
+    submitAdd(e.shiftKey);
+  });
+  // Pasting several lines adds one block per line. The text is never read for times or dates.
+  $('#arName').addEventListener('paste', (e) => {
+    const lines = (e.clipboardData.getData('text') || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) return;
+    e.preventDefault();
+    addBlocks(lines, false);
+  });
+
+  // Open the add row, optionally with a due date already set (clicking a day in Week).
+  function openAddRow({ due = null } = {}) {
+    setTab('today');
+    if (due) {
+      add.due = due;
+      add.free = false;
+      renderAddRow();
+    }
+    $('#arName').focus();
+    $('#addRow').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
   // ---------- week ----------
@@ -728,14 +912,7 @@
       head.append(el('span', 'wk-name', d.toLocaleDateString([], { weekday: 'short' })), el('span', 'wk-num', String(d.getDate())));
       const letter = P.blockLetter(k, state.settings.blocks);
       if (letter) head.append(el('span', 'wk-letter', letter));
-      head.addEventListener('click', () => {
-        const tag = P.daysBetween(today(), k) === 0 ? 'today' : P.daysBetween(today(), k) === 1 ? 'tmrw' : `${d.getMonth() + 1}/${d.getDate()}`; // dates beat "next B": unambiguous
-        quick.value = ` ${tag}`;
-        quick.focus();
-        quick.setSelectionRange(0, 0);
-        previewQuick();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
+      head.addEventListener('click', () => openAddRow({ due: k }));
       col.append(head);
       const items = state.tasks.filter((t) => t.due === k).sort((a, b) => (b.kind === 'test') - (a.kind === 'test'));
       for (const t of items) {
@@ -799,8 +976,7 @@
     if (e.key !== 'Enter') return;
     const v = e.target.value.trim();
     if (!v) return;
-    const r = P.parseQuick(v, qopts());
-    await P.addTasks([P.makeTask({ ...r, someday: true, plan: null, due: null, kind: 'todo' })]);
+    await P.addTasks([P.makeTask({ title: v, someday: true })]);
     e.target.value = '';
   });
 
@@ -1051,8 +1227,7 @@
       if (entry.note) parts.push(entry.note);
       await P.log(parts.join(' — '), 'eod');
       if (entry.tomorrow) {
-        const r = P.parseQuick(entry.tomorrow, qopts(P.addDays(k, 1)));
-        await P.addTasks([P.makeTask({ ...r, order: 0 })]);
+        await P.addTasks([P.makeTask({ title: entry.tomorrow, plan: P.addDays(k, 1), order: 0 })]);
       }
       toast('Checked in. Sleep well 🌙');
     });
@@ -1377,14 +1552,10 @@
 
   $('#editBlocksBtn').addEventListener('click', () => openBlocksEditor());
   $('#letterChip').addEventListener('click', () => openBlocksEditor());
-  $('#blockStrip').addEventListener('click', (e) => {
-    const blk = e.target.closest('.blk, .blk-setup');
-    if (blk) openBlocksEditor();
-  });
 
   // ---------- settings ----------
 
-  function openSettings() {
+  function openSettings(focus) {
     const s = state.settings;
     const f = $('#settingsForm');
     f.guardMode.value = s.guardMode;
@@ -1429,6 +1600,7 @@
     f.weeklyReviewDay.value = String(s.weeklyReviewDay);
     $('#onitryResult').textContent = '';
     $('#settingsDialog').showModal();
+    if (focus === 'courses') f.courses.focus();
   }
 
   function parseLetters(text) {
@@ -1622,8 +1794,7 @@
     if (location.hash === '#blocks') openBlocksEditor();
     else if (location.hash === '#settings') openSettings();
     render();
-    previewQuick();
-    if (VIEW === 'tab' && !state.focus) quick.focus();
+    if (VIEW === 'tab' && !state.focus) $('#arName').focus();
     setInterval(tickTimer, 1000);
     setInterval(renderClock, 15000);
     setInterval(() => {

@@ -6,6 +6,7 @@
   <title>Timecheck</title>
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="lib/controls.css">
   <link rel="stylesheet" href="today.css">
 </head>
 <body class="today-body">
@@ -24,16 +25,10 @@
     </header>
 
 
-    <section class="add-card">
-      <span class="add-icon" data-icon="plus"></span>
-      <textarea id="quickAdd" rows="1" spellcheck="false" placeholder="Add to your schedule… “econ practice 30m”, “break 10m”, “mun call at 4pm”"></textarea>
-      <div class="add-preview" id="quickPreview"></div>
-    </section>
-
     <section class="now-bar" id="nowBar" aria-live="polite"></section>
 
     <nav class="t-tabs" id="tabs" role="tablist">
-      <button data-tab="today" class="on">Schedule</button>
+      <button data-tab="today" class="on">Queue</button>
       <button data-tab="week">Week</button>
       <button data-tab="someday">Free time</button>
       <button data-tab="journal">Journal</button>
@@ -42,13 +37,26 @@
     <main class="t-grid">
       <section class="t-col card" data-col="today">
         <div class="col-head">
-          <h2>Schedule</h2>
+          <h2>Queue</h2>
           <span class="col-meta" id="todayMeta"></span>
         </div>
-        <div class="blocks" id="blockStrip"></div>
         <div class="heads-up" id="headsUp"></div>
-        <div class="cal" id="cal"><div class="cal-inner" id="calInner"></div></div>
+        <ol class="queue" id="queue"></ol>
+        <div class="addrow" id="addRow">
+          <div class="ar-main">
+            <input id="arName" class="ar-name" placeholder="Add a block…" maxlength="200" spellcheck="false" autocomplete="off" aria-label="Block name">
+            <span id="arLen"></span>
+            <button type="button" class="btn primary ar-add" id="arAdd">Add</button>
+          </div>
+          <div class="ar-opts">
+            <span id="arType"></span>
+            <span id="arSubject"></span>
+            <button type="button" class="tc-drop" id="arMore" aria-haspopup="true" aria-expanded="false"><span class="tc-label">More</span><span class="tc-caret">▾</span></button>
+            <span class="ar-tags" id="arTags"></span>
+          </div>
+        </div>
         <div class="list-foot" id="todayFoot"></div>
+        <button type="button" class="link-btn" id="schoolLink">School schedule ›</button>
         <details class="done-today" id="doneToday">
           <summary></summary>
           <ol class="task-list" id="doneList"></ol>
@@ -148,7 +156,7 @@
         <label>Colors<select name="palette"></select></label>
       </div>
 
-      <div class="set-sec">Block days</div>
+      <div class="set-sec">School schedule</div>
       <label class="check"><input type="checkbox" name="blocksEnabled"> Show my A/B/C/D rotation and class blocks</label>
       <div class="row3">
         <label>Known date<input type="date" name="blocksAnchorDate"></label>
@@ -280,6 +288,8 @@
   </dialog>
 
   <script src="lib/icons.js"></script>
+  <script src="lib/stepper.js"></script>
+  <script src="lib/menu.js"></script>
   <script src="lib/palettes.js"></script>
   <script src="lib/planner.js"></script>
   <script src="lib/onitry.js"></script>

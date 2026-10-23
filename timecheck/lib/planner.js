@@ -1,4 +1,4 @@
-// InkPlan: data model, natural-language quick add, dates, block days and storage
+// InkPlan: data model, dates, block days and storage
 // for Timecheck. Shared by the Today page, the distraction gate and the
 // service worker; also loads in Node for unit tests.
 (function (g) {
@@ -9,16 +9,6 @@
 
   const DAY = 86400000;
   const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const WD_ALIASES = {
-    sun: 0, sunday: 0,
-    mon: 1, monday: 1,
-    tue: 2, tues: 2, tuesday: 2,
-    wed: 3, weds: 3, wednesday: 3,
-    thu: 4, thur: 4, thurs: 4, thursday: 4,
-    fri: 5, friday: 5,
-    sat: 6, saturday: 6,
-  };
-  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
   const pad = (n) => String(n).padStart(2, '0');
   const dateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -233,142 +223,6 @@
       .join('\n\n');
   }
 
-  // ---------- quick add ----------
-
-  const BREAK_WORDS = /^(break|rest|snack|nap|walk|dinner|lunch|shower|stretch)\b/i;
-  const TEST_WORDS = /\b(test|quiz|exam|summative|midterm|final|assessment|ils|psat|sat)\b/i;
-  const DATE_PREPS = new Set(['due', 'on', 'by', 'for', 'before', 'this']);
-
-  // Parse one line like "calc hw due thu 40m" or "econ test fri" or "~ cad the claw".
-  function parseQuick(input, { courses = DEFAULT_COURSES, today = dateKey(), blocks = null } = {}) {
-    let text = String(input || '').trim();
-    const out = { title: '', course: null, kind: 'todo', due: null, plan: null, estimate: null, someday: false, at: null };
-    if (!text) return out;
-
-    // Time of day pins it on the schedule: "at 4pm", "at 16:30", "@ 4:15". A bare
-    // 1–6 with no am/pm means afternoon (after school).
-    text = text.replace(/(?:^|\s)(?:at|@)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?=[\s.,;!?]|$)/i, (m, h, mm, ap) => {
-      let hour = Number(h);
-      const min = mm ? Number(mm) : 0;
-      if (hour > 23 || min > 59) return m;
-      if (ap) {
-        if (/pm/i.test(ap) && hour < 12) hour += 12;
-        if (/am/i.test(ap) && hour === 12) hour = 0;
-      } else if (hour >= 1 && hour <= 6) hour += 12;
-      out.at = `${pad(hour)}:${pad(min)}`;
-      return ' ';
-    });
-
-    // Block days: "due next B", "next c day", "test D day", "on A-day". A bare
-    // letter only counts after "next" or as a capital before "day", so the
-    // article in "a day" or "work on a project" never matches.
-    if (blocks && blocks.enabled) {
-      const letters = blocks.letters.join('');
-      const re = new RegExp(`(?:^|\\s)(?:(?:due|on|by|for|before)\\s+)?(?:next\\s+([${letters}${letters.toLowerCase()}])(?:[\\s-]?day)?|(?:on\\s+)?([${letters}])[\\s-]day)(?=[\\s.,;!?]|$)`);
-      text = text.replace(re, (m, a, b2) => {
-        const due = nextLetterDate((a || b2).toUpperCase(), today, blocks);
-        if (!due) return m;
-        out.due = due;
-        return ' ';
-      });
-    }
-
-    if (/^(~|someday\b:?|later:)/i.test(text)) {
-      out.someday = true;
-      text = text.replace(/^(~|someday\b:?|later:)\s*/i, '');
-    }
-
-    // Estimates: 40m, 40 min, 1h, 1.5h, 1h30
-    text = text.replace(/(?:^|\s)(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?\s*(\d+)\s*m?(?:in(?:s|utes?)?)?(?=\s|$)/i, (m, h, mm) => {
-      out.estimate = Math.round(parseFloat(h) * 60 + parseInt(mm, 10));
-      return ' ';
-    });
-    text = text.replace(/(?:^|\s)(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)(?=\s|$)/i, (m, n, unit) => {
-      out.estimate = Math.round(parseFloat(n) * (/^h/i.test(unit) ? 60 : 1));
-      return ' ';
-    });
-
-    const words = text.split(/\s+/).filter(Boolean);
-    const keep = [];
-    const setDue = (k) => {
-      if (!out.due) out.due = k;
-    };
-    for (let i = 0; i < words.length; i++) {
-      const raw = words[i];
-      const w = raw.toLowerCase().replace(/[.,;!?]+$/, '');
-      const next = (words[i + 1] || '').toLowerCase().replace(/[.,;!?]+$/, '');
-      let consumed = 0;
-      let date = null;
-
-      if (w === 'today' || w === 'tonight' || w === 'tn') date = today;
-      else if (['tmrw', 'tmr', 'tomorrow', 'tmw', 'tom'].includes(w)) date = addDays(today, 1);
-      else if (w === 'next' && WD_ALIASES[next] !== undefined) {
-        date = addDays(weekStart(addDays(today, 7)), (WD_ALIASES[next] + 6) % 7);
-        consumed = 1;
-      } else if (WD_ALIASES[w] !== undefined) {
-        const diff = (WD_ALIASES[w] - fromKey(today).getDay() + 7) % 7;
-        date = addDays(today, diff); // "fri" said on a Friday means today
-      } else if (/^\d{1,2}\/\d{1,2}$/.test(w)) {
-        const [mo, d] = w.split('/').map(Number);
-        date = resolveMonthDay(mo, d, today);
-      } else if (MONTHS.includes(w.slice(0, 3)) && /^\d{1,2}(st|nd|rd|th)?$/.test(next)) {
-        date = resolveMonthDay(MONTHS.indexOf(w.slice(0, 3)) + 1, parseInt(next, 10), today);
-        consumed = 1;
-      } else if (/^\d{1,2}(st|nd|rd|th)?$/.test(w) && MONTHS.includes(next.slice(0, 3))) {
-        date = resolveMonthDay(MONTHS.indexOf(next.slice(0, 3)) + 1, parseInt(w, 10), today);
-        consumed = 1;
-      } else if (w === 'in' && /^\d+$/.test(next) && /^(day|days|d)$/.test((words[i + 2] || '').toLowerCase())) {
-        date = addDays(today, parseInt(next, 10));
-        consumed = 2;
-      }
-
-      if (date) {
-        setDue(date);
-        // Drop a dangling "due"/"on"/"by" right before the date.
-        if (keep.length && DATE_PREPS.has(keep[keep.length - 1].toLowerCase())) keep.pop();
-        i += consumed;
-        continue;
-      }
-      if (w === 'due' && i === words.length - 1) continue;
-      keep.push(raw);
-    }
-
-    // Course: explicit #tag first, then any word matching a course or alias.
-    const idx = courseIndex(courses);
-    const titleWords = [];
-    for (const raw of keep) {
-      const w = raw.toLowerCase().replace(/[.,;:!?]+$/, '');
-      if (w.startsWith('#') && w.length > 1) {
-        const name = idx.get(w.slice(1));
-        out.course = out.course || name || raw.slice(1);
-        if (name) continue; // "#calc" → tag only
-      } else if (!out.course && idx.has(w)) {
-        out.course = idx.get(w);
-      }
-      titleWords.push(raw);
-    }
-    out.title = titleWords.join(' ').replace(/\s+/g, ' ').trim() || String(input).trim();
-
-    if (BREAK_WORDS.test(out.title) && !out.someday) {
-      out.kind = 'break';
-      if (!out.estimate) out.estimate = 10;
-    } else if (TEST_WORDS.test(out.title)) out.kind = 'test';
-    else if (out.due) out.kind = 'due';
-    if (!out.due && !out.someday) out.plan = today; // undated things are for today
-    if (out.at && out.due && !out.someday) out.plan = out.due; // "tmrw at 4pm" → on tomorrow's schedule
-    return out;
-  }
-
-  function resolveMonthDay(mo, d, today) {
-    const t = fromKey(today);
-    let y = t.getFullYear();
-    let k = `${y}-${pad(mo)}-${pad(d)}`;
-    if (daysBetween(today, k) < -60) k = `${y + 1}-${pad(mo)}-${pad(d)}`; // "1/5" in December → next year
-    return k;
-  }
-
-  // ---------- tasks & views ----------
-
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
   function makeTask(fields) {
@@ -520,32 +374,47 @@
     return events.find((e) => e.type === 'task' && e.end > nowMin) || null;
   }
 
-  // Side-by-side lanes for overlapping events (like a calendar's day view).
-  function assignLanes(events) {
-    const groups = [];
-    let group = [];
-    let groupEnd = -Infinity;
-    for (const ev of events.slice().sort((a, b) => a.start - b.start)) {
-      if (group.length && ev.start >= groupEnd) {
-        groups.push(group);
-        group = [];
-        groupEnd = -Infinity;
-      }
-      group.push(ev);
-      groupEnd = Math.max(groupEnd, ev.end);
-    }
-    if (group.length) groups.push(group);
-    for (const g of groups) {
-      const laneEnds = [];
-      for (const ev of g) {
-        let lane = laneEnds.findIndex((end) => end <= ev.start);
-        if (lane < 0) lane = laneEnds.push(0) - 1;
-        laneEnds[lane] = ev.end;
-        ev.lane = lane;
-      }
-      for (const ev of g) ev.lanes = laneEnds.length;
-    }
-    return events;
+  // ---------- the queue ----------
+  // The queue is today's open tasks in `order`. layoutDay works out their times;
+  // the rows are those tasks plus the classes that fall inside the stretch they cover.
+
+  // Rows for the list: tasks (numbered, in time order) and class blocks between them.
+  function queueRows(opts) {
+    const events = layoutDay(opts);
+    const now = opts.now || new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const tasks = events.filter((e) => e.type === 'task');
+    const last = tasks.length ? Math.max(...tasks.map((e) => e.end)) : -1;
+    let n = 0;
+    return events
+      .filter((e) => e.type === 'task' || (e.type === 'class' && e.end > nowMin && e.start < last))
+      .map((e) => (e.type === 'task' ? { ...e, n: ++n } : e));
+  }
+
+  // Ids of the open queued tasks (the running block is not in it), in queue order.
+  function queueIds(tasks, today = dateKey(), focus = null) {
+    return todayTasks(tasks, today)
+      .filter((t) => !t.done && !(focus && focus.taskId === t.id))
+      .map((t) => t.id);
+  }
+
+  // Order values for ids in their new sequence: {id: order}.
+  function orderFor(ids) {
+    return Object.fromEntries(ids.map((id, i) => [id, i + 1]));
+  }
+
+  // `ids` with `id` moved to index `to` (0 = top, ids.length = bottom).
+  function moveId(ids, id, to) {
+    const rest = ids.filter((x) => x !== id);
+    rest.splice(Math.max(0, Math.min(rest.length, to)), 0, id);
+    return rest;
+  }
+
+  // An `order` that puts a new task first in the queue (it runs next), or last when the queue is empty.
+  function nextOrder(tasks, today = dateKey(), focus = null) {
+    const ids = new Set(queueIds(tasks, today, focus));
+    const orders = tasks.filter((t) => ids.has(t.id)).map((t) => t.order);
+    return orders.length ? Math.min(...orders) - 1 : Date.now();
   }
 
   // ---------- guard (distraction gate) ----------
@@ -854,10 +723,10 @@
   g.InkPlan = {
     DAY, WEEKDAYS, COLORS, DEFAULT_COURSES, DEFAULT_SETTINGS, DEFAULT_SITES, DEFAULT_BLOCKS, STRICT_SENTENCES, K,
     dateKey, fromKey, addDays, daysBetween, weekStart, relDay, minutesOfDay, fmtTime, fmtMinutes, hhmm,
-    courseIndex, courseColor, parseQuick, makeTask, newId, isOpen,
+    courseIndex, courseColor, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
-    taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, assignLanes, domainOf, matchSite,
+    taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,
     makeBackup, parseBackup, restoreBackup,
