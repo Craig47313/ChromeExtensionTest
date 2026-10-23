@@ -1,4 +1,4 @@
-// Onitry Plan's dashboard. Runs in the side panel (today.html?view=panel), in its
+// Timecheck's dashboard. Runs in the side panel (today.html?view=panel), in its
 // own tab, or as every new tab, depending on the "Where it lives" setting. All persistent logic for focus blocks, the distraction
 // gate and nudges lives in the service worker (planner-bg.js); this page renders
 // state from chrome.storage and sends it commands.
@@ -244,7 +244,7 @@
       return;
     }
 
-    if (!f) document.title = 'Onitry Plan';
+    if (!f) document.title = 'Timecheck';
     if (f) {
       bar.classList.add(f.pausedAt ? 'paused' : f.kind === 'break' ? 'break' : 'running');
       const info = el('div', 'nb-info');
@@ -1447,6 +1447,39 @@
   function cleanSites(text) {
     return [...new Set(text.split(/[\s,]+/).map((x) => x.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '')).filter((x) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x)))];
   }
+
+  // ---------- backup & restore ----------
+
+  $('#exportBtn').addEventListener('click', async () => {
+    const all = await chrome.storage.local.get(null);
+    const backup = P.makeBackup(all, { version: chrome.runtime.getManifest().version });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 1)], { type: 'application/json' }));
+    const a = el('a');
+    a.href = url;
+    a.download = `timecheck-backup-${today()}.json`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast(`Exported ${(backup.data['pl:tasks'] || []).length} tasks and ${Object.keys(backup.data['pl:journal'] || {}).length} days of log`);
+  });
+
+  $('#importBtn').addEventListener('click', () => $('#importFile').click());
+  $('#importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const res = P.parseBackup(await file.text());
+    if (!res.ok) return toast(res.error);
+    const c = res.counts;
+    const when = c.exported ? ` from ${new Date(c.exported).toLocaleString()}` : '';
+    if (!confirm(`Restore this backup${when}?\n\n${c.tasks} tasks, ${c.sessions} focus sessions, ${c.days} days of log.\n\nThis replaces everything currently in Timecheck.`)) return;
+    const out = await P.restoreBackup(res.data);
+    $('#settingsDialog').close('cancel');
+    await load();
+    render();
+    toast(`Restored ${out.restored} items`);
+  });
 
   $('#settingsForm').addEventListener('submit', (e) => {
     // Request host access for newly added sites inside the click (needs a user gesture).

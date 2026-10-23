@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Onitry Plan",
-  "short_name": "Onitry Plan",
-  "version": "0.5.0",
+  "name": "Timecheck",
+  "short_name": "Timecheck",
+  "version": "0.6.0",
   "description": "Plan your school day, run focus blocks and gate distracting sites. Block days, a weekly review, and Onitry screen monitoring built in.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwW5trACXsLUqiMMDvNNYOnu1A2VgimJkar5f6PYcQJESYUPMsXVaFHSxvhWo6s134bczNBjU+GozfTv3V9OuPIRy5KNwgyAlLOL9B7XhEPXiWum0JhGiC8ADN6SHNlgdKVfm1Ld7N2i6zEAupUHwcwFo6RBOKh76UnN1Bl8DbdYZmNt3R9qHWPvOc3k0SfliN9MbOmmqdxgQIQTpexYELtU2Kq2F8KApWXmcoYdFHQNWdPD8MkB0xMBkLrKycaryguXTuZ9ofGFbSj3ruPvS9X0051fc9Sghewkowrv2H4lFMMt1Y5irv7qk0qXc+SWDYu7YuxHEulTmQdHpyGT0IwIDAQAB",
@@ -13,7 +13,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Onitry Plan",
+    "default_title": "Timecheck",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"
@@ -59,7 +59,7 @@
       "suggested_key": {
         "default": "Alt+Shift+P"
       },
-      "description": "Open Onitry Plan"
+      "description": "Open Timecheck"
     }
   },
   "web_accessible_resources": [

@@ -1,4 +1,4 @@
-# Onitry Plan
+# Timecheck
 
 A Chrome extension for school days. It's a planner that pushes back: quick add, focus blocks, a distraction gate, nudges, an end-of-day check-in, A/B/C/D block days, and a weekly review. It also works with **Onitry**, the desktop app that watches your screen to see whether you're on task.
 
@@ -82,13 +82,12 @@ What you get:
   Run it with the Python you use for Onitry, then restart Chrome. The extension's ID is fixed by the `key` in `manifest.json` (`dadagbofodnllhcohbhmjkdolklihcgn`), so the installer already knows it.
 - **Weekly review:** Onitry writes it with Claude, using Onitry's own API key. This works in the dev and BYOK editions.
 
-If the Monitry changes aren't on GitHub yet, `onitry-patches/` has them as patch files.
 
 ## Install (developer mode)
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and pick this `onitry-plan/` folder.
-3. Pin **Onitry Plan**, then click it.
+2. Click **Load unpacked** and pick this `timecheck/` folder.
+3. Pin **Timecheck**, then click it.
 4. The guide opens with a tutorial. Start with **Edit class blocks**: pick a day, press **Add block** for each class, and add any breaks. You can also paste a schedule as text in the same menu:
 
    ```
@@ -135,5 +134,4 @@ lib/planner.js     data model, quick-add parser, block days, weekly stats (also 
 lib/onitry.js      client for Onitry's local bridge + native launcher
 lib/palettes.js, lib/icons.js
 tests/             node --test tests/planner.test.js
-onitry-patches/    the Monitry-side changes as git patches
 ```

@@ -273,3 +273,34 @@ test('badge: minutes round up, seconds at the end, never counts over', () => {
   assert.equal(f(5000, { pausedAt: now }).text, '❚❚');
   assert.equal(P.badgeFor(null).text, '');
 });
+
+// ---------- backup ----------
+
+test('backup keeps data, drops live state, and strips the pairing code', () => {
+  const all = {
+    'pl:tasks': [P.makeTask({ title: 'a' })],
+    'pl:journal': { '2026-10-22': [{ t: 1, text: 'x', kind: 'log' }] },
+    'pl:settings': { ...P.DEFAULT_SETTINGS, onitry: { ...P.DEFAULT_SETTINGS.onitry, enabled: true, code: 'SECRET-CODE' } },
+    'pl:focus': { title: 'running' },
+    'pl:passes': { 'youtube.com': 1 },
+    'pl:onitry': { running: true },
+    'ui:other': 1,
+  };
+  const b = P.makeBackup(all, { now: 0 });
+  assert.equal(b.app, 'timecheck');
+  assert.deepEqual(Object.keys(b.data).sort(), ['pl:journal', 'pl:settings', 'pl:tasks']);
+  assert.equal(JSON.stringify(b).includes('SECRET-CODE'), false);
+  assert.equal(all['pl:settings'].onitry.code, 'SECRET-CODE'); // the original is untouched
+  const parsed = P.parseBackup(JSON.stringify(b));
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.counts.tasks, 1);
+  assert.equal(parsed.counts.days, 1);
+});
+
+test('parseBackup rejects what isn’t a backup and accepts the old name', () => {
+  assert.equal(P.parseBackup('nope').ok, false);
+  assert.equal(P.parseBackup('{"app":"inkwell","data":{"pl:tasks":[]}}').ok, false);
+  assert.equal(P.parseBackup('{"app":"timecheck","data":{"other":1}}').ok, false);
+  assert.equal(P.parseBackup('{"app":"onitry-plan","data":{"pl:tasks":[1],"pl:focus":{},"evil":2}}').counts.tasks, 1);
+  assert.deepEqual(Object.keys(P.parseBackup('{"app":"onitry-plan","data":{"pl:tasks":[1],"pl:focus":{},"evil":2}}').data), ['pl:tasks']);
+});

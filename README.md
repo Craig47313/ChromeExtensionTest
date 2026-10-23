@@ -2,7 +2,7 @@
 
 Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a Desmos-style graphing calculator. It runs in Chrome's side panel, next to the page you're reading, and it can also open in a full tab. You can clip text from websites and draw directly on top of any page.
 
-> The planner that briefly lived here is now its own extension, **Onitry Plan**, in [`onitry-plan/`](onitry-plan/).
+> The planner that briefly lived here is now its own extension, **Timecheck**, in [`timecheck/`](timecheck/).
 
 ## Features
 
@@ -124,7 +124,7 @@ lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/s
 lib/mathlib.js        safe math parser/evaluator (no eval)
 lib/graph.js          graph renderer with points of interest
 lib/palettes.js       color palettes (Onitry default)
-onitry-plan/           separate extension: Onitry Plan (planner)
+timecheck/             separate extension: Timecheck (planner)
 lib/store.js          chrome.storage wrapper
 lib/icons.js          inline SVG icon set
 content/annotate.js   on-page drawing overlay (injected on demand, isolated in a closed shadow root)

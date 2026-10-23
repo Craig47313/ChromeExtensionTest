@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Onitry Plan</title>
+  <title>Timecheck</title>
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="today.css">
@@ -220,6 +220,14 @@
           </select>
         </label>
         <label>&nbsp;<button type="button" class="btn" id="onitryLaunchBtn">Launch Onitry</button></label>
+      </div>
+
+      <div class="set-sec">Backup</div>
+      <p class="set-help">Everything (tasks, log, settings, reviews) in one file. The Onitry pairing code is left out. Restoring replaces what’s here.</p>
+      <div class="backup-row">
+        <button type="button" class="btn" id="exportBtn" data-icon="download">Export backup</button>
+        <button type="button" class="btn" id="importBtn" data-icon="upload">Restore from file…</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
       </div>
 
       <div class="set-sec">Subjects</div>

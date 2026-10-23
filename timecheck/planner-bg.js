@@ -1,4 +1,4 @@
-// Onitry Plan's service worker logic: focus blocks, the distraction gate
+// Timecheck's service worker logic: focus blocks, the distraction gate
 // (declarativeNetRequest redirect to guard.html), nudges, notifications, the
 // toolbar badge, where the planner opens, and syncing with the Onitry desktop
 // app (status, off-task escalation, launching it, the weekly AI review).
@@ -303,7 +303,7 @@
     }
     await chrome.action.setBadgeText({ text: b.text }).catch(() => {});
     if (!focus) {
-      await chrome.action.setTitle({ title: 'Onitry Plan' }).catch(() => {});
+      await chrome.action.setTitle({ title: 'Timecheck' }).catch(() => {});
       chrome.alarms.clear(BADGE);
       return;
     }
@@ -334,7 +334,7 @@
       }
       return { ok: false, error: 'alarm page didn’t answer' };
     } catch (err) {
-      console.warn('Onitry Plan alarm failed', err);
+      console.warn('Timecheck alarm failed', err);
       return { ok: false, error: err.message };
     }
   }
@@ -409,7 +409,7 @@
       if (meta.guardError) await P.store.set(K.meta, { ...meta, guardError: null });
     } catch (err) {
       lastGuardKey = null; // try again next time
-      console.error('Onitry Plan gate rules failed', err);
+      console.error('Timecheck gate rules failed', err);
       await P.store.update(K.meta, {}, (m) => ({ ...m, guardError: String(err && err.message) }));
     }
     // Sites that just became gated: send already-open tabs to the gate too.

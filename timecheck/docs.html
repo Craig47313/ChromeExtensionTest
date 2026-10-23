@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Onitry Plan guide</title>
+  <title>Timecheck guide</title>
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="docs.css">
 </head>
 <body class="docs-body">
   <header class="d-top">
-    <a class="d-brand" href="#tutorial"><img src="icons/icon-32.png" width="24" height="24" alt=""> Onitry Plan <span>guide</span></a>
+    <a class="d-brand" href="#tutorial"><img src="icons/icon-32.png" width="24" height="24" alt=""> Timecheck <span>guide</span></a>
     <div class="d-top-actions">
       <button class="icon-btn d-menu" id="menuBtn" data-icon="list" title="Contents" aria-expanded="false" aria-controls="nav"></button>
       <a class="btn primary" href="today.html">Open planner</a>
@@ -64,7 +64,7 @@
         <ol class="tut" id="tutorialSteps">
           <li data-step="open">
             <h3>Open the planner</h3>
-            <p>Pin <b>Onitry Plan</b> from Chrome’s puzzle-piece menu, then click it or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>. It opens in the side panel by default. Want it to take a whole tab instead? See <a href="#placement">Where it lives</a>.</p>
+            <p>Pin <b>Timecheck</b> from Chrome’s puzzle-piece menu, then click it or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>. It opens in the side panel by default. Want it to take a whole tab instead? See <a href="#placement">Where it lives</a>.</p>
             <a class="btn" href="today.html">Open planner</a>
           </li>
           <li data-step="blocks">
@@ -116,7 +116,7 @@
       <section id="overview" class="d-sec">
         <p class="d-kicker">Start here</p>
         <h2>What it does</h2>
-        <p class="d-lead">Onitry Plan is a school-day planner that pushes back. It knows what’s due, what class you’re in, and, with Onitry, whether you’re actually working, and it gets in the way of the stuff that isn’t.</p>
+        <p class="d-lead">Timecheck is a school-day planner that pushes back. It knows what’s due, what class you’re in, and, with Onitry, whether you’re actually working, and it gets in the way of the stuff that isn’t.</p>
         <div class="cards">
           <div class="card"><b>Plan in plain words</b><p>“econ practice 30m”, “break 10m”, “mun call at 4pm”, “calc hw due next B”. One per line, straight onto the schedule.</p></div>
           <div class="card"><b>Knows your schedule</b><p>A/B/C/D rotation, your classes, free blocks and breaks. Homework is laid out after your last class.</p></div>
@@ -155,7 +155,7 @@
       <section id="blocks" class="d-sec">
         <p class="d-kicker">Using it</p>
         <h2>Block days</h2>
-        <p>Your school rotates lettered days (A, B, C, D) on some weekdays and has unlettered days on others (Mondays). Onitry Plan works out each date’s letter and shows it next to the date, on the week view, and in the weekly review.</p>
+        <p>Your school rotates lettered days (A, B, C, D) on some weekdays and has unlettered days on others (Mondays). Timecheck works out each date’s letter and shows it next to the date, on the week view, and in the weekly review.</p>
         <h3>Setting it up</h3>
         <ol>
           <li><b>⚙ → Block days.</b> Pick a <i>Known date</i> and what letter it was, which weekdays get letters, and the letters themselves (default <code>ABCD</code>).</li>
@@ -312,7 +312,7 @@ python native_host/install.py   # use the Python you run Onitry with
       <section id="architecture" class="d-sec">
         <p class="d-kicker">How it works</p>
         <h2>Architecture</h2>
-        <p>Onitry Plan is a Manifest V3 Chrome extension with no server of its own. Everything lives in your browser profile, except the Onitry app, which runs on your own computer.</p>
+        <p>Timecheck is a Manifest V3 Chrome extension with no server of its own. Everything lives in your browser profile, except the Onitry app, which runs on your own computer.</p>
         <figure class="diagram">
           <svg viewBox="0 0 760 420" role="img" aria-labelledby="archTitle archDesc">
             <title id="archTitle">How the parts connect</title>
@@ -597,7 +597,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
         <h2>Troubleshooting</h2>
         <dl class="defs">
           <dt>The letter is wrong</dt><dd>Set ⚙ → Block days → Known date to a school day you’re sure of. Check which weekdays get letters, and that breaks are added (or not, if your school keeps counting through them).</dd>
-          <dt>A site isn’t gated</dt><dd>Is the gate up? Check the hint under the focus card, or <a href="#how-gate">Gate rules → Right now</a>. Sites you added need Chrome’s permission; re-save settings to be asked again. Errors show on <code>chrome://extensions</code> → Onitry Plan → Errors.</dd>
+          <dt>A site isn’t gated</dt><dd>Is the gate up? Check the hint under the focus card, or <a href="#how-gate">Gate rules → Right now</a>. Sites you added need Chrome’s permission; re-save settings to be asked again. Errors show on <code>chrome://extensions</code> → Timecheck → Errors.</dd>
           <dt>“Onitry not running”</dt><dd>Start Onitry, or press ⚙ → Onitry → Launch Onitry. Only one Onitry window can own the bridge port.</dd>
           <dt>“Pairing code not accepted”</dt><dd>Copy the code again from Onitry → ⚙ Configure. It changes only if <code>data/bridge_token</code> is deleted.</dd>
           <dt>“Launcher not installed”</dt><dd>Run <code>python native_host/install.py</code> in the Monitry folder, then fully quit and reopen Chrome. If you moved the Monitry folder or changed Python, run it again.</dd>
@@ -620,7 +620,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
         </dl>
       </section>
 
-      <footer class="d-foot">Onitry Plan <span id="version"></span> · part of the Onitry suite</footer>
+      <footer class="d-foot">Timecheck <span id="version"></span> · part of the Onitry suite</footer>
     </main>
   </div>
 

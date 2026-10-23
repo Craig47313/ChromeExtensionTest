@@ -1,4 +1,4 @@
-/* Onitry Plan guide. Builds on base.css (tokens, buttons). */
+/* Timecheck guide. Builds on base.css (tokens, buttons). */
 
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 body.docs-body { overflow-y: auto; background: var(--bg); }

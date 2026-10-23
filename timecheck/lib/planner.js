@@ -1,5 +1,5 @@
 // InkPlan: data model, natural-language quick add, dates, block days and storage
-// for Onitry Plan. Shared by the Today page, the distraction gate and the
+// for Timecheck. Shared by the Today page, the distraction gate and the
 // service worker; also loads in Node for unit tests.
 (function (g) {
   'use strict';
@@ -718,6 +718,52 @@
     };
   }
 
+  // ---------- backup ----------
+  // Everything under "pl:" except things that only make sense live: the running
+  // block, gate passes and Onitry's last status. The Onitry pairing code stays
+  // out of the file (it's a secret); after restoring you paste it in again.
+
+  const BACKUP_SKIP = new Set(['pl:focus', 'pl:passes', 'pl:onitry']);
+
+  function makeBackup(all, { now = Date.now(), version = '' } = {}) {
+    const data = {};
+    for (const [k, v] of Object.entries(all)) if (k.startsWith('pl:') && !BACKUP_SKIP.has(k)) data[k] = structuredCloneSafe(v);
+    if (data['pl:settings'] && data['pl:settings'].onitry) data['pl:settings'].onitry.code = '';
+    return { app: 'timecheck', format: 1, version, exported: new Date(now).toISOString(), data };
+  }
+
+  // Returns { ok, data, counts } or { ok: false, error }. Accepts files from before the rename.
+  function parseBackup(text) {
+    let b;
+    try {
+      b = JSON.parse(text);
+    } catch (_) {
+      return { ok: false, error: 'That file isn’t a backup (it isn’t valid JSON).' };
+    }
+    if (!b || typeof b !== 'object' || !['timecheck', 'onitry-plan'].includes(b.app) || !b.data || typeof b.data !== 'object') {
+      return { ok: false, error: 'That file isn’t a Timecheck backup.' };
+    }
+    const data = {};
+    for (const [k, v] of Object.entries(b.data)) if (k.startsWith('pl:') && !BACKUP_SKIP.has(k) && v !== undefined) data[k] = v;
+    if (!Object.keys(data).length) return { ok: false, error: 'That backup is empty.' };
+    const arr = (k) => (Array.isArray(data[k]) ? data[k].length : data[k] && typeof data[k] === 'object' ? Object.keys(data[k]).length : 0);
+    return { ok: true, data, counts: { tasks: arr('pl:tasks'), sessions: arr('pl:sessions'), days: arr('pl:journal'), exported: b.exported || null } };
+  }
+
+  // Replace every restorable key with the backup's; keys the backup lacks are cleared.
+  async function restoreBackup(data) {
+    const all = await chrome.storage.local.get(null);
+    const cur = all['pl:settings'] && all['pl:settings'].onitry;
+    const remove = Object.keys(all).filter((k) => k.startsWith('pl:') && !BACKUP_SKIP.has(k) && !(k in data));
+    const next = { ...data };
+    if (next['pl:settings'] && cur && cur.code && !(next['pl:settings'].onitry && next['pl:settings'].onitry.code)) {
+      next['pl:settings'] = { ...next['pl:settings'], onitry: { ...(next['pl:settings'].onitry || {}), code: cur.code } };
+    }
+    if (remove.length) await chrome.storage.local.remove(remove);
+    await chrome.storage.local.set(next);
+    return { restored: Object.keys(next).length, cleared: remove.length };
+  }
+
   // ---------- storage ----------
 
   const K = {
@@ -814,6 +860,7 @@
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, assignLanes, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,
+    makeBackup, parseBackup, restoreBackup,
     store, getSettings, setSettings, addTasks, updateTask, removeTask, log, ensureSeeded,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

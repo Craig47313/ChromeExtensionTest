@@ -1,4 +1,4 @@
-/* Onitry Plan dashboard. Builds on base.css (tokens, buttons, dialogs, toast). */
+/* Timecheck dashboard. Builds on base.css (tokens, buttons, dialogs, toast). */
 
 body.today-body { overflow-y: auto; background: var(--bg); }
 .t-app { max-width: 1440px; margin: 0 auto; padding: 22px 28px 60px; }
@@ -435,3 +435,4 @@ body.today-body { overflow-y: auto; background: var(--bg); }
 .check-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .t-dialog .check-row label.check { margin: 0; }
 .ev-focus.timeup { box-shadow: 0 0 0 2px var(--danger); }
+.backup-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
