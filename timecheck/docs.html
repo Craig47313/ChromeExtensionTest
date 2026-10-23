@@ -23,8 +23,8 @@
       <a href="#tutorial">Tutorial</a>
       <a href="#overview">What it does</a>
       <div class="d-nav-group">Using it</div>
-      <a href="#planning">Planning &amp; quick add</a>
-      <a href="#blocks">Block days</a>
+      <a href="#planning">The queue &amp; adding blocks</a>
+      <a href="#blocks">School schedule</a>
       <a href="#focus">Focus blocks</a>
       <a href="#gate">The distraction gate</a>
       <a href="#nudges">Nudges</a>
@@ -34,7 +34,7 @@
       <a href="#placement">Where it lives</a>
       <div class="d-nav-group">How it works</div>
       <a href="#architecture">Architecture</a>
-      <a href="#how-parser">The quick-add parser</a>
+      <a href="#how-queue">How the queue is timed</a>
       <a href="#how-rotation">Block rotation math</a>
       <a href="#how-gate">Gate rules</a>
       <a href="#how-alarms">Alarms &amp; nudges</a>
@@ -44,7 +44,7 @@
       <a href="#how-review">Review pipeline</a>
       <a href="#privacy">Privacy</a>
       <div class="d-nav-group">Reference</div>
-      <a href="#ref-quick">Quick-add cheat sheet</a>
+      <a href="#ref-queue">Queue controls</a>
       <a href="#ref-settings">Settings</a>
       <a href="#ref-storage">Storage keys</a>
       <a href="#ref-permissions">Permissions</a>
@@ -69,13 +69,13 @@
           </li>
           <li data-step="blocks">
             <h3>Put in your class blocks</h3>
-            <p>Open <b>⚙ → Block days → Edit class blocks</b>, or click the letter next to the date. Pick a day (A, B, C, D, or <i>No letter</i> for Mondays) and press <b>Add block</b> for each class. Each new block starts right after the last one with the same length, so a whole day usually takes a minute. Use <b>Copy from</b> when two days share most of their classes.</p>
+            <p>Open <b>⚙ → School schedule → Edit class blocks</b>, click <b>School schedule ›</b> under the queue, or click the letter next to the date. Pick a day (A, B, C, D, or <i>No letter</i> for Mondays) and press <b>Add block</b> for each class. Each new block starts right after the last one with the same length, so a whole day usually takes a minute. Use <b>Copy from</b> when two days share most of their classes.</p>
             <p>Call a block <b>Free</b> or <b>Study</b> and you’ll get a nudge with something to do when it starts.</p>
             <a class="btn" href="today.html#blocks">Edit class blocks</a>
           </li>
           <li data-step="anchor">
             <h3>Check today’s letter</h3>
-            <p>The rotation is counted from one date you know. If the letter next to the date is wrong, open <b>⚙ → Block days</b> and set <i>Known date</i> to any school day you’re sure about. On break? Add it under <b>Breaks &amp; no-school days</b> in the class blocks menu and the rotation pauses until you’re back.</p>
+            <p>The rotation is counted from one date you know. If the letter next to the date is wrong, open <b>⚙ → School schedule</b> and set <i>Known date</i> to any school day you’re sure about. On break? Add it under <b>Breaks &amp; no-school days</b> in the class blocks menu and the rotation pauses until you’re back.</p>
             <div class="try" id="tryLetter">
               <label>Check a date <input type="date" id="letterDate"></label>
               <div class="try-out" id="letterOut"></div>
@@ -83,16 +83,12 @@
             </div>
           </li>
           <li data-step="tasks">
-            <h3>Brain-dump your work</h3>
-            <p>Type everything into the <b>Add to your schedule…</b> box, one per line. It reads dates, subjects, tests, times (<code>at 4pm</code>), breaks and lengths out of plain words. Try it here, it uses your real subjects and block days:</p>
-            <div class="try">
-              <input id="tryQuick" spellcheck="false" placeholder="physics test next D" value="calc hw due tmrw 40m">
-              <div class="try-out" id="tryQuickOut"></div>
-            </div>
+            <h3>Build your queue</h3>
+            <p>Under the list there’s an <b>Add a block…</b> row. Type a name, set its length with the <b>▲ ▼</b> stepper (or the arrow keys, or the scroll wheel), pick <b>Focus</b> or <b>Break</b> and a subject, and press <b>Add</b>. What you type is the name and nothing else: <code>40m</code> stays in the name, so use the stepper for the length. To add a lot at once, paste a list: each line becomes a block.</p>
           </li>
           <li data-step="focus">
-            <h3>Run your schedule</h3>
-            <p>Everything you add lands on the <b>Schedule</b> calendar, one block after another. Press <b>Start</b> in the bar above it and the blocks run back to back: when one ends, the next one starts. <b>Pause</b> when you get interrupted; the timer (and Onitry) wait for you. The toolbar badge counts down, and while a block runs distracting sites are locked hard.</p>
+            <h3>Run your queue</h3>
+            <p>Press <b>Start</b> at the top and the whole queue runs back to back: when one block ends, the next one starts. Drag the <b>⋮⋮</b> handle to reorder, or use a row’s <b>⋮</b> menu. <b>Pause</b> when you get interrupted; the timer (and Onitry) wait for you. The toolbar badge counts down, and while a block runs distracting sites are locked hard.</p>
           </li>
           <li data-step="gate">
             <h3>Meet the gate</h3>
@@ -118,9 +114,9 @@
         <h2>What it does</h2>
         <p class="d-lead">Timecheck is a school-day planner that pushes back. It knows what’s due, what class you’re in, and, with Onitry, whether you’re actually working, and it gets in the way of the stuff that isn’t.</p>
         <div class="cards">
-          <div class="card"><b>Plan in plain words</b><p>“econ practice 30m”, “break 10m”, “mun call at 4pm”, “calc hw due next B”. One per line, straight onto the schedule.</p></div>
+          <div class="card"><b>One queue</b><p>Add blocks under the list, drag them into order and press Start once. The times are worked out for you.</p></div>
           <div class="card"><b>Knows your schedule</b><p>A/B/C/D rotation, your classes, free blocks and breaks. Homework is laid out after your last class.</p></div>
-          <div class="card"><b>A real schedule</b><p>Your day as a calendar. Blocks run back to back around your classes; drag to pin, drag the edge to resize, pause when life happens.</p></div>
+          <div class="card"><b>Runs itself</b><p>Blocks run back to back and skip past your classes. Pin one to a set time, nudge its length with a stepper, pause when life happens.</p></div>
           <div class="card"><b>The gate</b><p>Distracting sites redirect to a page with your to-do list. Getting through costs a reason, a wait and sometimes a typed sentence.</p></div>
           <div class="card"><b>Nudges</b><p>Idle check-ins, free-block suggestions, test-tomorrow reminders, a plan prompt and an end-of-day check-in.</p></div>
           <div class="card"><b>Onitry inside</b><p>Starts screen monitoring on your task, shows on/off task live, locks the gate when you drift, and can launch the app.</p></div>
@@ -133,40 +129,50 @@
 
       <section id="planning" class="d-sec">
         <p class="d-kicker">Using it</p>
-        <h2>Planning &amp; quick add</h2>
+        <h2>The queue &amp; adding blocks</h2>
         <p>The planner has four parts. On a wide screen they sit side by side; in the side panel they’re tabs.</p>
         <dl class="defs">
-          <dt>Schedule</dt><dd>Today as a calendar, like Google Calendar’s day view. Everything on today’s list (what you planned, homework due today or tomorrow, anything overdue, tests up to two days out) becomes a block, laid back to back from now in list order. Blocks flow around your classes (classes sit in their own rail on the left, and Free/Study blocks count as time you can use), around anything you pinned to a time, and after the block that’s running. The red line is now. Faded blocks are what you already did today.
+          <dt>Queue</dt><dd>One list, top to bottom: the <b>Start</b> card (or the block that’s running), the queue in order, then the add row. Everything on today’s list (what you added, homework due today or tomorrow, anything overdue, tests up to two days out) is a numbered row. Each row shows its <b>start and end time</b>, worked out from now (or from when the running block ends) in list order. The footer says how many blocks are left and when you’ll be done, and warns you if that runs past your cutoff.
             <ul>
-              <li><b>Drag a block</b> to pin it at a time (it snaps to 5 minutes and shows 📌). Click 📌 to let it flow with the rest again.</li>
-              <li><b>Drag its bottom edge</b> to change how long it is.</li>
-              <li><b>Click an empty spot</b> to add something at that time.</li>
-              <li><b>▶</b> starts that block now; the checkbox marks it done; the title opens it for editing.</li>
-            </ul>
-            The footer says how many blocks are left and when you’ll be done, and warns you if that runs past your cutoff (the end of work hours).</dd>
-          <dt>Week</dt><dd>A rolling 7 days starting today, so tomorrow is always visible, with each day’s letter. Click a day’s header to add something due that day. Below: everything due in the next three weeks.</dd>
-          <dt>Free time</dt><dd>Projects and ideas for when there’s “nothing” to do. The gate and the free-block nudge suggest these when your list is empty. Press <b>+</b> to put one on today’s list.</dd>
+              <li><b>Drag the ⋮⋮ handle</b> to reorder (or focus it and press <kbd>↑</kbd> <kbd>↓</kbd>). The times update at once.</li>
+              <li><b>The stepper on a row</b> sets its length in 5-minute steps: click ▲ ▼, press <kbd>↑</kbd> <kbd>↓</kbd>, or scroll over it.</li>
+              <li><b>The ⋮ menu</b> (or right-click a row): <i>Edit</i>, <i>Start now</i>, <i>Move to top</i>, <i>Move to bottom</i>, <i>Start at a set time…</i>, <i>Duplicate</i> and <i>Remove</i> (with undo). Click a name to edit it too.</li>
+              <li><b>A thin grey row</b> is a class (<i>“Physics · 8:27–8:57 · class”</i>). The times skip past it. Free and Study blocks count as time you can use.</li>
+              <li><b>📌</b> marks a block that starts at a set time (<i>Start at a set time…</i>). The rest of the queue works around it; it stays at its time even if you reorder. Choose <i>Let it flow</i> in the same menu to unpin it.</li>
+              <li><b>School schedule ›</b> under the list opens your class blocks.</li>
+            </ul></dd>
+          <dt>Week</dt><dd>A rolling 7 days starting today, so tomorrow is always visible, with each day’s letter. Click a day’s header to open the add row with that due date. Below: everything due in the next three weeks.</dd>
+          <dt>Free time</dt><dd>Projects and ideas for when there’s “nothing” to do. The gate and the free-block nudge suggest these when your queue is empty. Press <b>+</b> to put one in the queue.</dd>
           <dt>Journal</dt><dd>See <a href="#journal">Journal &amp; check-ins</a>.</dd>
         </dl>
-        <p>Click any task’s title to edit it: subject, type (to-do, due, test), due date, estimate, whether it’s on today’s list or the free-time list, or delete it (with undo).</p>
-        <p>Quick add tips: <kbd>Enter</kbd> adds, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line, and pasting a whole list adds one task per line. Undated tasks go straight onto today’s schedule; the preview under the box shows exactly where (<b>→ 16:32–17:02</b>) before you press Enter. Add <code>at 4pm</code> to pin it, and start a line with <code>break</code>, <code>snack</code>, <code>dinner</code> or <code>walk</code> to make a break block. The full grammar is in the <a href="#ref-quick">cheat sheet</a>.</p>
+        <h3>The add row</h3>
+        <p>It sits right under the last block. Nothing you type is decoded: the name is just the name, and every other setting is a control.</p>
+        <ul>
+          <li><b>Name</b>, then <kbd>Enter</kbd> (or <b>Add</b>) to put it at the end of the queue. <kbd>Shift</kbd>+<kbd>Enter</kbd> adds it as the <b>next</b> block instead.</li>
+          <li><b>Length</b>: the stepper (5 to 240 minutes). It starts at your default block length, or 10 for a break.</li>
+          <li><b>Focus / Break</b> and <b>subject</b> are dropdowns. <i>Add subject…</i> opens ⚙ → Subjects.</li>
+          <li><b>More</b>: a <i>due date</i> (today, tomorrow, the next A/B/C/D day, or any date), <i>Start at a set time</i> (an hh:mm stepper in 5-minute steps), or <i>Put in Free time</i> instead of the queue. What you set shows as a tag you can remove.</li>
+          <li><b>Paste several lines</b> into the name and each line becomes a block (names only; they take the length, type and subject currently set).</li>
+        </ul>
+        <p>A block due later than tomorrow isn’t in today’s queue; it shows up in <b>Week</b> and joins the queue when it gets close. Click a task’s name to edit its subject, type (to-do, due, test), due date, estimate or list, or to delete it.</p>
+        <p class="note">The stepper and the menus are shared components (<code>lib/stepper.js</code>, <code>lib/menu.js</code>), so other parts of the extension use the same ones.</p>
       </section>
 
       <section id="blocks" class="d-sec">
         <p class="d-kicker">Using it</p>
-        <h2>Block days</h2>
+        <h2>School schedule (block days)</h2>
         <p>Your school rotates lettered days (A, B, C, D) on some weekdays and has unlettered days on others (Mondays). Timecheck works out each date’s letter and shows it next to the date, on the week view, and in the weekly review.</p>
         <h3>Setting it up</h3>
         <ol>
-          <li><b>⚙ → Block days.</b> Pick a <i>Known date</i> and what letter it was, which weekdays get letters, and the letters themselves (default <code>ABCD</code>).</li>
+          <li><b>⚙ → School schedule.</b> Pick a <i>Known date</i> and what letter it was, which weekdays get letters, and the letters themselves (default <code>ABCD</code>).</li>
           <li><b>Edit class blocks &amp; breaks</b> opens the class blocks menu. Each day type (each letter, plus <i>No letter</i>) has its own list of blocks with a start, an end and a class name. Class names that match a subject get that subject’s color.</li>
           <li><b>Breaks &amp; no-school days</b> (same menu): pick a from and to date and press <b>Add break</b>. The rotation pauses on those days. If your school counts holidays as part of the rotation, don’t add them.</li>
         </ol>
         <h3>What it changes</h3>
         <ul>
-          <li>Today shows a strip of your classes with the current one highlighted. Click it to edit.</li>
+          <li>Classes that fall inside your queue show as thin grey rows, and the times skip past them.</li>
           <li>Homework time slots start after your last class.</li>
-          <li>Quick add understands <code>due next B</code>, <code>D day</code>, <code>on A-day</code> and <code>next c day</code>.</li>
+          <li>The add row’s <b>More ▾ → Due date</b> offers the next A, B, C and D day.</li>
           <li>When a <b>Free</b> or <b>Study</b> block starts, you get a nudge with the top thing on your list, and in Smart gate mode the gate goes up if something’s due by tomorrow.</li>
         </ul>
         <p class="note">Blocks are matched as free by the words <i>free, study, flex, open, unscheduled</i> or <i>off</i> anywhere in the name, so “Study hall” and “Free (library)” both count.</p>
@@ -175,15 +181,15 @@
       <section id="focus" class="d-sec">
         <p class="d-kicker">Using it</p>
         <h2>Focus blocks</h2>
-        <p>Every block on your schedule is a focus block (or a break). Press <b>Start</b> in the bar above the schedule, or <b>▶</b> on any block. A block lasts as long as it is on the calendar: its estimate, or your default length.</p>
+        <p>Every block in the queue is a focus block (or a break). Press <b>Start</b> at the top to run the whole queue, or choose <i>Start now</i> in a row’s ⋮ menu. A block lasts as long as its length stepper says (40 minutes by default; change that in ⚙).</p>
         <h3>Back to back</h3>
-        <p>With <b>⚙ → Run my schedule back to back</b> on (the default), the schedule runs itself. When a block’s time is up, the next one starts and a notification asks whether you finished the last one (<b>✓ Finished</b>, or ignore it and it flows back in later). If the next block is pinned more than 10 minutes away, the run stops there and the bar shows <i>Next at…</i>.</p>
+        <p>With <b>⚙ → Run my schedule back to back</b> on (the default), the queue runs itself. When a block’s time is up, the next one starts and a notification asks whether you finished the last one (<b>✓ Finished</b>, or ignore it and it flows back in later). If the next block is pinned more than 10 minutes away, the run stops there and the bar shows <i>Next at…</i>.</p>
         <h3>The bar</h3>
         <ul>
-          <li><b>Pause</b> freezes the timer and pauses Onitry. The badge shows <code>❚❚</code>, the gate relaxes to its normal rules, and everything after it on the calendar slides later. <b>Resume</b> picks up where you left off. After 15 minutes paused you get a nudge.</li>
+          <li><b>Pause</b> freezes the timer and pauses Onitry. The badge shows <code>❚❚</code>, the gate relaxes to its normal rules, and everything after it in the queue slides later. <b>Resume</b> picks up where you left off. After 15 minutes paused you get a nudge.</li>
           <li><b>Done</b> ticks it off and starts the next block.</li>
-          <li><b>+10</b> adds ten minutes.</li>
-          <li><b>Skip</b> moves it to the end of today and starts the next block.</li>
+          <li><b>+5</b> adds five minutes.</li>
+          <li><b>Skip</b> moves it to the end of the queue and starts the next block.</li>
           <li><b>Stop</b> ends the block and stops the run, without ticking anything off.</li>
         </ul>
         <h3>When a block ends</h3>
@@ -349,30 +355,22 @@ python native_host/install.py   # use the Python you run Onitry with
         </figure>
         <dl class="defs">
           <dt>Pages</dt><dd><code>today.html</code> is the planner, the same page in the side panel (<code>?view=panel</code>), a tab, or a new tab. <code>guard.html</code> is the gate; the URL you were trying to reach rides along after the <code>#</code>. <code>docs.html</code> is this guide. All of them re-render when storage changes, so every open copy stays in sync.</dd>
-          <dt>Shared library</dt><dd><code>lib/planner.js</code> holds the data model, dates, the quick-add parser, block rotation, the gate decision and weekly stats. It has no Chrome dependencies apart from the storage helpers, so the same file runs in the pages, the service worker and Node unit tests.</dd>
+          <dt>Shared library</dt><dd><code>lib/planner.js</code> holds the data model, dates, the queue timing, block rotation, the gate decision and weekly stats. It has no Chrome dependencies apart from the storage helpers, so the same file runs in the pages, the service worker and Node unit tests.</dd>
           <dt>Service worker</dt><dd><code>background.js</code> loads <code>lib/planner.js</code>, <code>lib/onitry.js</code> and <code>planner-bg.js</code>. It owns everything that has to keep happening with no page open: focus timers, gate rules, nudges, Onitry polling, escalation, the launcher and the review request. Pages send it commands like <code>{type: 'plan:focus', action: 'start'}</code>.</dd>
           <dt>Why storage is the hub</dt><dd>Chrome can stop the service worker whenever it’s idle, so nothing important lives in its memory. On wake-up it reads storage, recreates its alarms and re-syncs the gate.</dd>
         </dl>
       </section>
 
-      <section id="how-parser" class="d-sec">
+      <section id="how-queue" class="d-sec">
         <p class="d-kicker">How it works</p>
-        <h2>The quick-add parser</h2>
-        <p><code>parseQuick()</code> turns one line into <code>{title, course, kind, due, plan, estimate, someday}</code>. It runs in passes, each one removing what it understood so the rest becomes the title:</p>
+        <h2>How the queue is timed</h2>
+        <p>The queue is today’s open tasks sorted by their <code>order</code> number. <code>layoutDay()</code> in <code>lib/planner.js</code> turns that list into times, and <code>queueRows()</code> keeps the task rows plus the classes that fall inside the stretch they cover:</p>
         <ol>
-          <li><b>Free-time prefix.</b> A leading <code>~</code>, <code>someday:</code> or <code>later:</code> puts it on the free-time list.</li>
-          <li><b>Letter days</b> (only when block days are on). <code>next B</code>, <code>next b day</code>, <code>B day</code>, <code>on B-day</code>. A bare letter only counts after “next” or as a capital before “day”, so “a day” and “work on a project” are left alone. The date is the next date with that letter, after today.</li>
-          <li><b>Estimates.</b> <code>40m</code>, <code>40 min</code>, <code>1h</code>, <code>1.5h</code>, <code>1h30</code>.</li>
-          <li><b>Dates</b>, word by word: <code>today</code>/<code>tonight</code>, <code>tmrw</code>/<code>tomorrow</code>, weekday names (the next one; said on that day it means today), <code>next fri</code> (next week’s), <code>10/16</code>, <code>oct 16</code>, <code>16 oct</code>, <code>in 3 days</code>. A “due”, “on”, “by”, “for” or “before” right in front of a date is dropped. Month/day dates more than two months in the past roll to next year.</li>
-          <li><b>Subject.</b> A <code>#tag</code> wins; otherwise the first word that matches a subject name or alias (⚙ → Subjects). The word stays in the title.</li>
-          <li><b>Type.</b> Words like test, quiz, exam, summative, midterm, final, assessment make it a <i>test</i>; anything with a date is <i>due</i>; the rest are <i>to-dos</i>.</li>
-          <li><b>Today.</b> No date and not free-time? It goes on today’s list.</li>
+          <li><b>Fixed things first.</b> Classes (not Free or Study blocks), blocks pinned to a set time, and the running block each take their own time.</li>
+          <li><b>The rest flow.</b> Starting from now, or from when the running block ends, each block takes the next gap that fits its length, in queue order. A block that would run into a class or a pinned block waits until it’s over.</li>
+          <li><b>Reordering</b> renumbers <code>order</code> for the queue (<code>orderFor</code>, <code>moveId</code>); <i>Shift+Enter</i> gives a new block an order just ahead of the first one (<code>nextOrder</code>).</li>
         </ol>
-        <div class="try">
-          <label for="tryQuick2">Try a line</label>
-          <input id="tryQuick2" spellcheck="false" value="spanish quiz on C day 20m">
-          <div class="try-out" id="tryQuick2Out"></div>
-        </div>
+        <p>Nothing is read out of the text you type. The name is stored as typed; length, type, subject, due date and set time come only from the controls.</p>
       </section>
 
       <section id="how-rotation" class="d-sec">
@@ -505,25 +503,21 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
 
       <!-- ===================== REFERENCE ===================== -->
 
-      <section id="ref-quick" class="d-sec">
+      <section id="ref-queue" class="d-sec">
         <p class="d-kicker">Reference</p>
-        <h2>Quick-add cheat sheet</h2>
+        <h2>Queue controls</h2>
         <table class="tbl">
-          <thead><tr><th>Type</th><th>Means</th></tr></thead>
+          <thead><tr><th>Control</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>calc hw due tmrw 40m</code></td><td>Calc, due tomorrow, 40 minutes</td></tr>
-            <tr><td><code>econ test fri</code></td><td>Econ test this Friday (today, if it’s Friday)</td></tr>
-            <tr><td><code>lang essay next mon</code></td><td>Due Monday of next week</td></tr>
-            <tr><td><code>chem summative 10/16</code> · <code>oct 16</code> · <code>16 oct</code></td><td>A date</td></tr>
-            <tr><td><code>read ch 4 in 3 days</code></td><td>Due three days from now</td></tr>
-            <tr><td><code>physics frq due next B</code> · <code>D day</code> · <code>on A-day</code></td><td>The next date with that letter</td></tr>
-            <tr><td><code>email mrs neri 10m</code></td><td>No date → straight onto today’s schedule</td></tr>
-            <tr><td><code>mun call at 4pm</code> · <code>at 16:30</code> · <code>at 4</code></td><td>Pinned at that time (a bare 1–6 means afternoon)</td></tr>
-            <tr><td><code>calc review tmrw at 5pm</code></td><td>Pinned on tomorrow’s schedule</td></tr>
-            <tr><td><code>break</code> · <code>snack 15m</code> · <code>dinner 30m</code></td><td>A break block (10 min by default)</td></tr>
-            <tr><td><code>~ cad the claw</code> · <code>someday: kaggle</code></td><td>Free-time list</td></tr>
-            <tr><td><code>robot wiring #frc</code></td><td>Force a subject</td></tr>
-            <tr><td><code>1h</code> · <code>1.5h</code> · <code>1h30</code> · <code>45 min</code></td><td>Estimates</td></tr>
+            <tr><td><kbd>Enter</kbd> in the add row</td><td>Add at the end of the queue</td></tr>
+            <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Add as the next block</td></tr>
+            <tr><td>Paste several lines</td><td>One block per line, names only</td></tr>
+            <tr><td>Stepper: ▲ ▼ · <kbd>↑</kbd> <kbd>↓</kbd> · wheel</td><td>Length in 5-minute steps (<kbd>PgUp</kbd>/<kbd>PgDn</kbd> step 30)</td></tr>
+            <tr><td>Drag ⋮⋮ · <kbd>↑</kbd> <kbd>↓</kbd> on the handle</td><td>Reorder</td></tr>
+            <tr><td>⋮ or right-click a row</td><td>Edit, Start now, Move to top/bottom, Start at a set time…, Duplicate, Remove</td></tr>
+            <tr><td>More ▾ in the add row</td><td>Due date, start at a set time, or Free time</td></tr>
+            <tr><td>Click a day in Week</td><td>Open the add row with that due date</td></tr>
+            <tr><td><kbd>Esc</kbd> · click outside</td><td>Close a menu</td></tr>
           </tbody>
         </table>
       </section>
@@ -536,7 +530,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
           <tbody>
             <tr><td>Where it lives</td><td>Side panel</td><td>Side panel, pinned tab, or every new tab</td></tr>
             <tr><td>Theme · Colors</td><td>System · Onitry</td><td></td></tr>
-            <tr><td>Block days</td><td>On, 10/13/2026 = C, Tue–Fri lettered</td><td>Class blocks and breaks are in their own menu</td></tr>
+            <tr><td>School schedule</td><td>On, 10/13/2026 = C, Tue–Fri lettered</td><td>Class blocks and breaks are in their own menu</td></tr>
             <tr><td>Gate mode</td><td>Smart</td><td>See <a href="#gate">the gate</a></td></tr>
             <tr><td>Gated sites</td><td>9 common ones</td><td>One per line; adding asks Chrome for access</td></tr>
             <tr><td>Default pass</td><td>10 min</td><td>Outside focus blocks, up to 60</td></tr>
@@ -596,7 +590,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
         <p class="d-kicker">Reference</p>
         <h2>Troubleshooting</h2>
         <dl class="defs">
-          <dt>The letter is wrong</dt><dd>Set ⚙ → Block days → Known date to a school day you’re sure of. Check which weekdays get letters, and that breaks are added (or not, if your school keeps counting through them).</dd>
+          <dt>The letter is wrong</dt><dd>Set ⚙ → School schedule → Known date to a school day you’re sure of. Check which weekdays get letters, and that breaks are added (or not, if your school keeps counting through them).</dd>
           <dt>A site isn’t gated</dt><dd>Is the gate up? Check the hint under the focus card, or <a href="#how-gate">Gate rules → Right now</a>. Sites you added need Chrome’s permission; re-save settings to be asked again. Errors show on <code>chrome://extensions</code> → Timecheck → Errors.</dd>
           <dt>“Onitry not running”</dt><dd>Start Onitry, or press ⚙ → Onitry → Launch Onitry. Only one Onitry window can own the bridge port.</dd>
           <dt>“Pairing code not accepted”</dt><dd>Copy the code again from Onitry → ⚙ Configure. It changes only if <code>data/bridge_token</code> is deleted.</dd>

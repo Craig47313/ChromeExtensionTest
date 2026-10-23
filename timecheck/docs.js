@@ -1,5 +1,5 @@
 // The guide page: theme, contents highlighting, a tutorial that ticks itself
-// off from your real data, and live "try it" boxes backed by lib/planner.js.
+// off from your real data, and live checks backed by lib/planner.js.
 (async () => {
   'use strict';
 
@@ -85,46 +85,6 @@
     $('#tutCount').textContent = done === steps.length ? 'All done. Nice.' : `${done} of ${steps.length} done`;
   }
 
-  // ---------- try-it boxes ----------
-
-  function describeQuick(line) {
-    const r = P.parseQuick(line, { courses: settings.courses, blocks: settings.blocks });
-    const out = [];
-    const pill = (label, value, cls = '') => {
-      const p = el('span', `pill ${cls}`);
-      p.append(el('small', null, label), el('b', null, value));
-      return p;
-    };
-    out.push(pill('title', r.title || '—'));
-    if (r.course) {
-      const c = pill('subject', r.course);
-      c.style.setProperty('--c', P.courseColor(settings.courses, r.course));
-      c.classList.add('course');
-      out.push(c);
-    }
-    out.push(pill('type', r.someday ? 'free-time idea' : r.kind === 'test' ? 'test' : r.kind === 'due' ? 'homework' : 'to-do', r.kind === 'test' ? 'test' : ''));
-    if (r.due) {
-      const letter = P.blockLetter(r.due, settings.blocks);
-      const rel = P.relDay(r.due);
-      const extra = [/\d/.test(rel) ? '' : P.fromKey(r.due).toLocaleDateString([], { month: 'short', day: 'numeric' }), letter ? `${letter} day` : ''].filter(Boolean).join(', ');
-      out.push(pill('due', extra ? `${rel} (${extra})` : rel));
-    } else if (r.plan) out.push(pill('list', 'today'));
-    if (r.estimate) out.push(pill('estimate', P.fmtMinutes(r.estimate)));
-    return out;
-  }
-
-  function wireQuick(inputId, outId) {
-    const input = $(inputId);
-    const out = $(outId);
-    const run = () => {
-      out.textContent = '';
-      if (input.value.trim()) out.append(...describeQuick(input.value));
-    };
-    input.addEventListener('input', run);
-    run();
-  }
-  wireQuick('#tryQuick', '#tryQuickOut');
-  wireQuick('#tryQuick2', '#tryQuick2Out');
 
   const letterDate = $('#letterDate');
   letterDate.value = P.dateKey();
@@ -186,8 +146,6 @@
     await renderTutorial();
     renderLetter();
     await renderGateNow();
-    $('#tryQuick').dispatchEvent(new Event('input'));
-    $('#tryQuick2').dispatchEvent(new Event('input'));
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
