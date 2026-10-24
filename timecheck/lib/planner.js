@@ -235,6 +235,7 @@
       plan: null, // day you intend to work on it
       estimate: null, // minutes
       someday: false, // "when there's nothing to do" list
+      activityId: null, // the activity this is an instance of
       done: null, // timestamp
       created: Date.now(),
       order: Date.now(),
@@ -417,6 +418,76 @@
     return orders.length ? Math.min(...orders) - 1 : Date.now();
   }
 
+  // ---------- activities ----------
+  // An activity is a thing you keep doing ("CAD the claw"): a name, a subject and your
+  // reflections. Its length, count and time are worked out from the sessions, so they
+  // can't drift. Names match ignoring case and spacing.
+
+  const actKey = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+  function median(nums) {
+    if (!nums.length) return null;
+    const a = nums.slice().sort((x, y) => x - y);
+    const mid = Math.floor(a.length / 2);
+    return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+  }
+
+  const sessionIsFor = (act, s) => s.kind !== 'break' && (s.activityId ? s.activityId === act.id : actKey(s.title) === act.key);
+
+  // Time, count, usual length (median of the last 5 blocks, to 5 minutes) and on-task % of one activity.
+  function activityStats(act, sessions = [], { now = Date.now() } = {}) {
+    const mine = sessions.filter((s) => sessionIsFor(act, s)).sort((a, b) => a.end - b.end);
+    const weekStartMs = fromKey(weekStart(dateKey(new Date(now)))).getTime();
+    const total = mine.reduce((sum, s) => sum + (s.minutes || 0), 0);
+    const week = mine.filter((s) => s.end >= weekStartMs).reduce((sum, s) => sum + (s.minutes || 0), 0);
+    const planned = mine.slice(-5).map((s) => s.planned || s.minutes).filter(Boolean);
+    const m = median(planned);
+    const withOnitry = mine.filter((s) => s.onitry && s.onitry.onPct != null);
+    const weight = withOnitry.reduce((sum, s) => sum + Math.max(1, s.minutes), 0);
+    return {
+      blocks: mine.length,
+      total,
+      week,
+      last: mine.length ? mine[mine.length - 1].end : null,
+      usual: m ? Math.max(5, Math.round(m / 5) * 5) : null,
+      onPct: weight ? Math.round(withOnitry.reduce((sum, s) => sum + s.onitry.onPct * Math.max(1, s.minutes), 0) / weight) : null,
+      recent: mine.slice(-8).reverse(),
+    };
+  }
+
+  // "today", "yesterday", "2 days ago", "3 weeks ago".
+  function ago(ts, now = Date.now()) {
+    const d = daysBetween(dateKey(new Date(ts)), dateKey(new Date(now)));
+    if (d <= 0) return 'today';
+    if (d === 1) return 'yesterday';
+    if (d < 14) return `${d} days ago`;
+    if (d < 60) return `${Math.floor(d / 7)} weeks ago`;
+    return `${Math.floor(d / 30)} months ago`;
+  }
+
+  // Suggestions under the add row: names with a word starting like the query first, then the rest that contain it;
+  // each group by most recent, then most often. Open homework and Free time projects carry a tag.
+  function suggest(query, activities, sessions, tasks, { now = Date.now(), limit = 6 } = {}) {
+    const q = actKey(query);
+    if (!q) return [];
+    const qw = q.split(' ');
+    const out = [];
+    for (const a of activities) {
+      const words = a.key.split(' ');
+      const own = tasks.filter((t) => !t.done && (t.activityId ? t.activityId === a.id : actKey(t.title) === a.key));
+      const stats = activityStats(a, sessions, { now });
+      if (!stats.blocks && !tasks.some((t) => (t.activityId ? t.activityId === a.id : actKey(t.title) === a.key))) continue;
+      const tier = qw.every((w) => words.some((x) => x.startsWith(w))) ? 0 : a.key.includes(q) ? 1 : -1;
+      if (tier < 0) continue;
+      const free = own.find((t) => t.someday);
+      const due = own.find((t) => !t.someday && t.due);
+      const tag = free ? 'Free time' : due ? `Due ${relDay(due.due, dateKey(new Date(now))).toLowerCase()}` : null;
+      out.push({ activity: a, stats, tier, tag, task: free || due || null });
+    }
+    out.sort((x, y) => x.tier - y.tier || (y.stats.last || 0) - (x.stats.last || 0) || y.stats.blocks - x.stats.blocks || x.activity.key.localeCompare(y.activity.key));
+    return out.slice(0, limit);
+  }
+
   // ---------- breaks and the off switch ----------
 
   // Minutes of break taken on `today`: finished breaks plus the one running now.
@@ -498,6 +569,7 @@
     placement: 'panel', // panel | tab | newtab
     weeklyReviewDay: 0, // Sunday evening nudge
     breakBudget: 45, // minutes of breaks a day before another one needs the off-switch code
+    reflect: 'every', // ask how a block went: every | done | never
     offCode: null, // { salt, hash } of the 4 to 6 digit off-switch code, never the code itself
     onitry: { enabled: false, code: '', autoStart: true, autoStop: true, escalate: true, launch: true, port: 47323 },
   };
@@ -658,6 +730,7 @@
     const data = {};
     for (const [k, v] of Object.entries(all)) if (k.startsWith('pl:') && !BACKUP_SKIP.has(k)) data[k] = structuredCloneSafe(v);
     if (data['pl:settings'] && data['pl:settings'].onitry) data['pl:settings'].onitry.code = '';
+    if (data['pl:meta']) delete data['pl:meta'].offUntil; // an off switch shouldn't follow a backup to another profile
     return { app: 'timecheck', format: 1, version, exported: new Date(now).toISOString(), data };
   }
 
@@ -706,7 +779,10 @@
     onitry: 'pl:onitry',
     meta: 'pl:meta',
     reviews: 'pl:reviews',
+    activities: 'pl:activities',
   };
+
+  const locked = (name, fn) => (typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request(name, fn) : fn());
 
   const store = {
     async get(key, fallback) {
@@ -717,11 +793,14 @@
       return chrome.storage.local.set({ [key]: value });
     },
     // Read-modify-write so two open views don't clobber each other's edits.
-    async update(key, fallback, fn) {
-      const cur = await store.get(key, fallback);
-      const next = await fn(structuredCloneSafe(cur));
-      await store.set(key, next);
-      return next;
+    // Serialized per key (across pages and the service worker), so two quick edits can't overwrite each other.
+    update(key, fallback, fn) {
+      return locked(`pl-store:${key}`, async () => {
+        const cur = await store.get(key, fallback);
+        const next = await fn(structuredCloneSafe(cur));
+        await store.set(key, next);
+        return next;
+      });
     },
   };
 
@@ -743,22 +822,71 @@
     return store.update(K.settings, {}, (s) => ({ ...s, ...patch }));
   }
 
+  // ---------- activities: storage ----------
+
+  // Make sure every task and focus session name has an activity, and every task points at one.
+  // Safe to run any time: first run builds the list from what is already stored.
+  function syncActivities() {
+    return locked('pl-activities', async () => {
+      const [tasks, sessions] = await Promise.all([store.get(K.tasks, []), store.get(K.sessions, [])]);
+      const seen = [];
+      for (const t of tasks) if (t.kind !== 'break' && t.title) seen.push([t.title, t.course]);
+      for (const x of sessions) if (x.kind !== 'break' && x.title) seen.push([x.title, x.course]);
+      const acts = await store.update(K.activities, [], (list) => {
+        const byKey = new Map(list.map((a) => [a.key, a]));
+        for (const [name, course] of seen) {
+          const key = actKey(name);
+          if (!key) continue;
+          const have = byKey.get(key);
+          if (!have) {
+            const a = { id: newId(), name: String(name).trim(), key, course: course || null, created: Date.now(), reflections: [] };
+            byKey.set(key, a);
+            list.push(a);
+          } else if (!have.course && course) have.course = course;
+        }
+        return list;
+      });
+      const byKey = new Map(acts.map((a) => [a.key, a.id]));
+      if (tasks.some((t) => t.kind !== 'break' && !t.activityId)) {
+        await store.update(K.tasks, [], (all) => all.map((t) => (t.kind === 'break' || t.activityId ? t : { ...t, activityId: byKey.get(actKey(t.title)) || null })));
+      }
+      return acts;
+    });
+  }
+
+  // A reflection on an activity, also written to the Log.
+  function addReflection(activityId, { text, minutes = null, onPct = null, sessionId = null, at = Date.now() }) {
+    return locked('pl-activities', async () => {
+      const acts = await store.update(K.activities, [], (list) =>
+        list.map((a) => (a.id === activityId ? { ...a, reflections: (a.reflections || []).concat([{ id: newId(), at, text, minutes, onPct, sessionId }]) } : a))
+      );
+      await log(text, 'reflect', at, activityId);
+      return acts.find((a) => a.id === activityId) || null;
+    });
+  }
+
   async function addTasks(list) {
-    return store.update(K.tasks, [], (tasks) => tasks.concat(list));
+    const next = await store.update(K.tasks, [], (tasks) => tasks.concat(list));
+    await syncActivities();
+    return next;
   }
 
   async function updateTask(id, patch) {
-    return store.update(K.tasks, [], (tasks) => tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    // A new name is a different activity: let the sync link it again.
+    const p = 'title' in patch ? { ...patch, activityId: null } : patch;
+    const next = await store.update(K.tasks, [], (tasks) => tasks.map((t) => (t.id === id ? { ...t, ...p } : t)));
+    if ('title' in patch) await syncActivities();
+    return next;
   }
 
   async function removeTask(id) {
     return store.update(K.tasks, [], (tasks) => tasks.filter((t) => t.id !== id));
   }
 
-  async function log(text, kind = 'log', at = Date.now()) {
+  async function log(text, kind = 'log', at = Date.now(), act = null) {
     const k = dateKey(new Date(at));
     return store.update(K.journal, {}, (j) => {
-      (j[k] = j[k] || []).push({ t: at, text, kind });
+      (j[k] = j[k] || []).push(act ? { t: at, text, kind, act } : { t: at, text, kind });
       return j;
     });
   }
@@ -787,6 +915,7 @@
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
     breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
+    actKey, activityStats, ago, suggest, syncActivities, addReflection,
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,

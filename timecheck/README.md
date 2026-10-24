@@ -28,7 +28,7 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 - **Off-switch code:** set a 4 to 6 digit code in ⚙ → Breaks & off switch (stored as a salted hash). On the gate page or in ⚙, entering it turns the gate and Onitry off for 15 minutes, 1 hour or the rest of the day. Each use is logged.
 - **An alarm rings when a block ends.** With nothing next, the bar turns red with **⏰ Time's up** (Done / +5 / +10 / Stop) instead of counting up; it rings again after 2 minutes and ends the block itself after 10.
 - The toolbar badge counts down accurately (minutes rounded up, seconds in the last minute while the planner is open, `❚❚` paused, `END` time's up) and clears the moment nothing's running.
-- **Distraction gate:** YouTube, Reddit and other sites redirect to a page that shows what's due. To get through, you write a reason (it's logged to your journal) and wait. The wait grows each time you come back. During a focus block you also have to type out a sentence, and passes are capped at 5 minutes.
+- **Distraction gate:** YouTube, Reddit and other sites redirect to a page that shows what's due. To get through, you write a reason (it's logged to your log) and wait. The wait grows each time you come back. During a focus block you also have to type out a sentence, and passes are capped at 5 minutes.
 - **When the gate is up:**
 
   | Mode | Gate is up |
@@ -47,7 +47,9 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 - The weekly review.
 
 **Look back**
-- **Journal:** timestamped log, daily stats, check-in streak and the last 7 days.
+- **Log:** timestamped log, daily stats, check-in streak and the last 7 days. Notes have an **About** dropdown to tie them to an activity.
+- **Activities:** Timecheck learns the things you keep doing. Typing in the add row suggests them with their usual length, when you last did them and total time; picking one fills in subject and length. Click an activity's name for its page (time this week and overall, recent sessions, your reflections).
+- **Reflections:** when a focus block ends, one line asks how it went (after every block, only after Done, or never; skip any time). It's saved on the activity and in the Log.
 - **Weekly review:**
   - Shows the week in numbers: tasks done and missed per subject, focus time, Onitry's on-task %, gate passes and why, and your moods.
   - Onitry can write a short review of it. That call runs in the Onitry app on your own API key, so this extension never holds a key.
@@ -129,7 +131,7 @@ today.html/.css/.js the planner (side panel, tab or new tab) + class blocks menu
 docs.html/.css/.js the built-in guide (tutorial, overview, how it works, reference)
 guard.html/.css/.js the distraction gate
 base.css           theme tokens, buttons, dialogs
-lib/planner.js     data model, queue timing, block days, weekly stats (also runs in Node)
+lib/planner.js     data model, queue timing, activities, block days, weekly stats (also runs in Node)
 lib/stepper.js     shared number stepper (▲ ▼, arrow keys, wheel)
 lib/menu.js        shared dropdowns, ⋮ and right-click menus (styles in lib/controls.css)
 lib/onitry.js      client for Onitry's local bridge + native launcher

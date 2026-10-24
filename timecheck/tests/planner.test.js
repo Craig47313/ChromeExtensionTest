@@ -309,3 +309,85 @@ test('off-switch choices: 15 min, 1 hour, rest of today', () => {
   assert.equal(day.pauseMinutes, null);
   assert.equal(P.offWindow('nope', now), null);
 });
+
+// ---------- activities ----------
+
+const sess = (title, minutes, daysAgo, o = {}) => {
+  const end = at(14, 0).getTime() - daysAgo * 86400000;
+  return { id: `${title}${daysAgo}`, title, kind: 'focus', minutes, planned: minutes, start: end - minutes * 60000, end, outcome: 'done', ...o };
+};
+
+test('activity names match ignoring case and spacing; stats come from the sessions', () => {
+  assert.equal(P.actKey('  CAD   the Claw '), 'cad the claw');
+  const act = { id: 'a1', name: 'CAD the claw', key: 'cad the claw' };
+  const sessions = [
+    sess('CAD the claw', 40, 9), sess('cad the  claw', 40, 6), sess('CAD the claw', 60, 3), sess('CAD the claw', 30, 2),
+    sess('CAD the claw', 45, 1, { onitry: { onPct: 80 } }), sess('CAD the claw', 45, 0, { onitry: { onPct: 60 } }), sess('Other', 99, 0),
+    sess('CAD the claw', 10, 0, { kind: 'break' }),
+  ];
+  const st = P.activityStats(act, sessions, { now: at(15, 0).getTime() });
+  assert.equal(st.blocks, 6);
+  assert.equal(st.total, 40 + 40 + 60 + 30 + 45 + 45);
+  assert.equal(st.usual, 45); // median of the last five: 40, 60, 30, 45, 45 → 45
+  assert.equal(st.onPct, 70);
+  assert.equal(st.recent.length, 6);
+  assert.equal(P.activityStats(act, [], {}).usual, null);
+  // A session that points at an activity by id isn't claimed by a same-named one.
+  assert.equal(P.activityStats(act, [sess('CAD the claw', 30, 1, { activityId: 'other' })]).blocks, 0);
+});
+
+test('relative "last done" wording', () => {
+  const now = at(15).getTime();
+  assert.equal(P.ago(now, now), 'today');
+  assert.equal(P.ago(now - 86400000, now), 'yesterday');
+  assert.equal(P.ago(now - 2 * 86400000, now), '2 days ago');
+  assert.equal(P.ago(now - 21 * 86400000, now), '3 weeks ago');
+});
+
+test('suggestions: word starts first, then recent and frequent, with homework and Free time tags', () => {
+  const now = at(15).getTime();
+  const acts = ['CAD the claw', 'CAD mounting brackets', 'Finish CAD lessons', 'Decade review', 'Econ practice'].map((name, i) => ({ id: `a${i}`, name, key: P.actKey(name) }));
+  const sessions = [sess('CAD the claw', 40, 2), sess('CAD the claw', 40, 5), sess('CAD mounting brackets', 30, 8), sess('Finish CAD lessons', 30, 1), sess('Decade review', 20, 0), sess('Econ practice', 30, 0)];
+  const tasks = [
+    P.makeTask({ title: 'CAD mounting brackets', activityId: 'a1', due: '2026-10-23', kind: 'due' }),
+    P.makeTask({ title: 'Finish CAD lessons', activityId: 'a2', someday: true }),
+  ];
+  const out = P.suggest('cad', acts, sessions, tasks, { now });
+  // "Decade review" only contains "cad": it comes after the three that have a word starting with it.
+  assert.deepEqual(out.map((r) => r.activity.name), ['Finish CAD lessons', 'CAD the claw', 'CAD mounting brackets', 'Decade review']);
+  assert.equal(out[0].tag, 'Free time');
+  assert.equal(out[2].tag, 'Due tomorrow');
+  assert.equal(out[1].stats.usual, 40);
+  assert.deepEqual(P.suggest('', acts, sessions, tasks, { now }), []);
+  assert.deepEqual(P.suggest('zzz', acts, sessions, tasks, { now }), []);
+  // An activity with no sessions and no task isn't suggested.
+  assert.deepEqual(P.suggest('econ', acts, [], [], { now }), []);
+});
+
+test('first run builds activities from tasks and sessions; adding links tasks; reflections reach the Log', async () => {
+  const mem = {};
+  globalThis.chrome = { storage: { local: { get: async (k) => (typeof k === 'string' ? { [k]: mem[k] } : { ...mem }), set: async (o) => Object.assign(mem, o) } } };
+  const K = P.K;
+  mem[K.tasks] = [P.makeTask({ title: 'Calc hw', course: 'Calc' }), P.makeTask({ title: 'snack', kind: 'break' }), P.makeTask({ title: 'calc  HW' })];
+  mem[K.sessions] = [sess('CAD the claw', 40, 1, { course: 'CAD' })];
+  let acts = await P.syncActivities();
+  assert.deepEqual(acts.map((a) => a.name).sort(), ['CAD the claw', 'Calc hw']);
+  assert.equal(acts.find((a) => a.key === 'calc hw').course, 'Calc');
+  assert.ok(mem[K.tasks].filter((t) => t.kind !== 'break').every((t) => t.activityId === acts.find((a) => a.key === 'calc hw').id));
+  assert.equal(mem[K.tasks].find((t) => t.kind === 'break').activityId, null);
+  await P.addTasks([P.makeTask({ title: 'Econ Practice' })]);
+  assert.equal(mem[K.activities].length, 3);
+  await P.addTasks([P.makeTask({ title: 'econ practice' })]);
+  assert.equal(mem[K.activities].length, 3); // reused
+  const econ = mem[K.activities].find((a) => a.key === 'econ practice');
+  assert.equal(mem[K.tasks].filter((t) => t.activityId === econ.id).length, 2);
+  // Renaming a task re-links it.
+  const t = mem[K.tasks].find((x) => x.title === 'Econ Practice');
+  await P.updateTask(t.id, { title: 'Spanish quiz' });
+  assert.equal(mem[K.tasks].find((x) => x.id === t.id).activityId, mem[K.activities].find((a) => a.key === 'spanish quiz').id);
+  await P.addReflection(econ.id, { text: 'Went well', minutes: 30, onPct: 90, at: at(14).getTime() });
+  assert.equal(mem[K.activities].find((a) => a.id === econ.id).reflections[0].text, 'Went well');
+  const entry = Object.values(mem[K.journal]).flat()[0];
+  assert.deepEqual([entry.kind, entry.text, entry.act], ['reflect', 'Went well', econ.id]);
+  delete globalThis.chrome;
+});

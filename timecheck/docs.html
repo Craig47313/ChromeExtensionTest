@@ -28,7 +28,8 @@
       <a href="#focus">Focus blocks</a>
       <a href="#gate">The distraction gate</a>
       <a href="#nudges">Nudges</a>
-      <a href="#journal">Journal &amp; check-ins</a>
+      <a href="#activities">Activities &amp; reflections</a>
+      <a href="#journal">Log &amp; check-ins</a>
       <a href="#review">Weekly review</a>
       <a href="#onitry">Onitry</a>
       <a href="#placement">Where it lives</a>
@@ -92,7 +93,7 @@
           </li>
           <li data-step="gate">
             <h3>Meet the gate</h3>
-            <p>Open YouTube during a focus block. You land on the gate instead. Getting through needs a written reason, a wait, and during focus a typed sentence. Every pass goes in your journal, so you can see the pattern later.</p>
+            <p>Open YouTube during a focus block. You land on the gate instead. Getting through needs a written reason, a wait, and during focus a typed sentence. Every pass goes in your log, so you can see the pattern later.</p>
           </li>
           <li data-step="onitry">
             <h3>Connect Onitry</h3>
@@ -104,7 +105,7 @@
           </li>
           <li data-step="review">
             <h3>Read your first weekly review</h3>
-            <p>On Sunday evening, open <b>Journal → Weekly review</b>. The numbers are always there; press <b>Write my review with Onitry</b> for a short coaching note on the week.</p>
+            <p>On Sunday evening, open <b>Log → Weekly review</b>. The numbers are always there; press <b>Write my review with Onitry</b> for a short coaching note on the week.</p>
           </li>
         </ol>
       </section>
@@ -120,7 +121,8 @@
           <div class="card"><b>The gate</b><p>Distracting sites redirect to a page with your to-do list. Getting through costs a reason, a wait and sometimes a typed sentence.</p></div>
           <div class="card"><b>Nudges</b><p>Idle check-ins, free-block suggestions, test-tomorrow reminders, a plan prompt and an end-of-day check-in.</p></div>
           <div class="card"><b>Onitry inside</b><p>Starts screen monitoring on your task, shows on/off task live, locks the gate when you drift, and can launch the app.</p></div>
-          <div class="card"><b>Journal</b><p>Everything you do is timestamped: focus blocks, passes and why, check-ins, notes you type.</p></div>
+          <div class="card"><b>Activities</b><p>Timecheck learns the things you keep doing, suggests them as you type, and keeps their time and your reflections together.</p></div>
+          <div class="card"><b>Log</b><p>Everything you do is timestamped: focus blocks, passes and why, check-ins, reflections, notes you type.</p></div>
           <div class="card"><b>Weekly review</b><p>Your week in numbers, and a short review written by Onitry using your own API key.</p></div>
         </div>
       </section>
@@ -143,7 +145,7 @@
             </ul></dd>
           <dt>Week</dt><dd>A rolling 7 days starting today, so tomorrow is always visible, with each day’s letter. Click a day’s header to open the add row with that due date. Below: everything due in the next three weeks.</dd>
           <dt>Free time</dt><dd>Projects and ideas for when there’s “nothing” to do. The gate and the free-block nudge suggest these when your queue is empty. Press <b>+</b> to put one in the queue.</dd>
-          <dt>Journal</dt><dd>See <a href="#journal">Journal &amp; check-ins</a>.</dd>
+          <dt>Log</dt><dd>See <a href="#journal">Log &amp; check-ins</a>.</dd>
         </dl>
         <h3>The add row</h3>
         <p>It sits right under the last block. Nothing you type is decoded: the name is just the name, and every other setting is a control.</p>
@@ -273,10 +275,29 @@
         <p class="note">On a Mac, notifications only show if Chrome is allowed to send them in <b>System Settings → Notifications → Google Chrome</b>.</p>
       </section>
 
+      <section id="activities" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Activities &amp; reflections</h2>
+        <p>An <b>activity</b> is a thing you keep doing, like “CAD the claw”. Timecheck makes one the first time you add a name; adding the same name again (ignoring capitals and spacing) reuses it. The first time you open this version, activities are built from your tasks, past sessions and Free time projects, so the suggestions work from day one. Breaks are not activities.</p>
+        <h3>Suggestions in the add row</h3>
+        <p>Type a few letters and matching activities drop down under the name box. Each shows its subject color, its usual length (the median of its last five blocks), when you last did it (<i>2 days ago</i>) and the total time. Open homework and Free time projects appear too, tagged <i>Due tomorrow</i> or <i>Free time</i>. Names with a word that starts like what you typed come first, then the most recent and most frequent. Use <kbd>↑</kbd> <kbd>↓</kbd> and <kbd>Enter</kbd>, or click. Picking one fills in the name, subject and usual length; <b>Add</b> then puts it in the queue (a homework or Free time project that is already a task moves into the queue instead of being added twice).</p>
+        <h3>The activity page</h3>
+        <p>Click an activity’s name (on the top card, in the queue, in Done today, in the Free time list, or on a Log line) to open its page:</p>
+        <ul>
+          <li>time this week and all time, blocks, usual length, last done, and Onitry’s average on-task %</li>
+          <li>your reflections and notes, newest first, with a box to write a new one (<kbd>Enter</kbd> saves)</li>
+          <li>recent sessions: when, how long, how it ended</li>
+        </ul>
+        <p>The queue’s <b>⋮ → Edit</b> (and the ✎ on Done today and Free time rows) edits the task itself.</p>
+        <h3>Reflections</h3>
+        <p>When a focus block ends, a strip under the top card asks <i>“How did CAD the claw go?”</i> with the block’s length and on-task %. Type a line and press <b>Enter</b> or <b>Save</b>, or <b>Skip</b>. It is kept on that activity and also appears in the Log. The next block keeps running meanwhile. <b>⚙ → Ask how a block went</b> chooses after every focus block (the default), only after Done, or never. Breaks, skipped and switched blocks never ask.</p>
+      </section>
+
       <section id="journal" class="d-sec">
         <p class="d-kicker">Using it</p>
-        <h2>Journal &amp; check-ins</h2>
-        <p>The journal is a timestamped log of your day. You add to it by typing in the box (<kbd>Enter</kbd> logs it with the time), and the planner adds to it automatically:</p>
+        <h2>Log &amp; check-ins</h2>
+        <p>The log is a timestamped record of your day. You add to it by typing in the box (<kbd>Enter</kbd> logs it with the time), and the planner adds to it automatically. The <b>About</b> dropdown above the box ties a note to an activity, and those notes show on its page too.</p>
+        <p>Entries about an activity carry its name; click it to open the activity page.</p>
         <ul>
           <li><b>▶</b> focus blocks started and stopped (with Onitry’s on-task % at the end)</li>
           <li><b>✓</b> tasks finished</li>
@@ -291,7 +312,7 @@
       <section id="review" class="d-sec">
         <p class="d-kicker">Using it</p>
         <h2>Weekly review</h2>
-        <p>Journal → <b>Weekly review</b> shows the week (Monday to Sunday) in numbers: tasks done, focus time and blocks, Onitry’s on-task %, gate passes, your average mood, tasks done and missed per subject, which sites you unlocked most, and what you missed.</p>
+        <p>Log → <b>Weekly review</b> shows the week (Monday to Sunday) in numbers: tasks done, focus time and blocks, Onitry’s on-task %, gate passes, your average mood, tasks done and missed per subject, which sites you unlocked most, and what you missed.</p>
         <p>On Sunday it reviews the week ending today; on Monday it shows the week that just ended; the rest of the week it shows the week so far.</p>
         <p><b>Write my review with Onitry</b> sends those numbers to the Onitry app, which asks Claude for a short review: one line on how it went, what worked, what slipped, and three concrete things for next week tied to your upcoming deadlines. It’s saved, so it’s still there next time. <a href="#how-review">What gets sent</a>.</p>
       </section>
@@ -306,7 +327,7 @@
           <li><b>Ending the block stops Onitry</b> (optional) and records its on-task %.</li>
           <li><b>Off task during a block</b> locks the gate. See <a href="#how-escalation">escalation</a>.</li>
           <li><b>Launch Onitry</b> (⚙ → Onitry) starts the app if it isn’t running, and a focus block does it automatically if you leave that option on.</li>
-          <li>If you start monitoring from the Onitry window instead, the planner notes it in your journal.</li>
+          <li>If you start monitoring from the Onitry window instead, the planner notes it in your log.</li>
         </ul>
         <h3>Pairing</h3>
         <ol>
@@ -352,7 +373,7 @@ python native_host/install.py   # use the Python you run Onitry with
 
             <g class="d-node"><rect x="28" y="52" width="196" height="64" rx="10"/><text x="126" y="79">Planner page</text><text x="126" y="99" class="d-sub">today.html · panel / tab</text></g>
             <g class="d-node"><rect x="252" y="52" width="196" height="64" rx="10"/><text x="350" y="79">Gate page</text><text x="350" y="99" class="d-sub">guard.html#&lt;url&gt;</text></g>
-            <g class="d-node accent"><rect x="28" y="168" width="420" height="64" rx="10"/><text x="238" y="195">chrome.storage.local</text><text x="238" y="215" class="d-sub">tasks · focus · sessions · journal · settings · reviews</text></g>
+            <g class="d-node accent"><rect x="28" y="168" width="420" height="64" rx="10"/><text x="238" y="195">chrome.storage.local</text><text x="238" y="215" class="d-sub">tasks · focus · sessions · log · settings · reviews</text></g>
             <g class="d-node"><rect x="28" y="284" width="420" height="64" rx="10"/><text x="238" y="311">Service worker</text><text x="238" y="331" class="d-sub">planner-bg.js · reacts to storage changes &amp; alarms</text></g>
             <g class="d-node soft"><rect x="28" y="364" width="420" height="36" rx="8"/><text x="238" y="387" class="d-sub">alarms · notifications · declarativeNetRequest redirect rules · badge</text></g>
 
@@ -483,7 +504,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
           <li><code>escalatedUntil</code> is set to 10 minutes from now in <code>pl:meta</code>.</li>
           <li>All gate passes are revoked.</li>
           <li>The gate re-syncs as if every site were newly gated, so open distracting tabs are sent to the gate.</li>
-          <li>A notification and a journal line record it.</li>
+          <li>A notification and a log line record it.</li>
         </ol>
         <p>While escalated, <code>guardState</code> keeps the gate up even in Off mode, the gate page says “Onitry saw that.” and hides the pass form, and the service worker refuses pass requests. Each further off-task report pushes the 10 minutes out again. Ending the focus block clears it.</p>
       </section>
@@ -504,7 +525,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
         <p class="d-kicker">How it works</p>
         <h2>Review pipeline</h2>
         <ol>
-          <li><code>weekStats()</code> builds the week from your local data: totals, done and missed per subject, which sites you unlocked and your reasons, missed tasks, each day’s letter, focus time, mood, derailers and up to 8 journal lines, plus next week’s deadlines.</li>
+          <li><code>weekStats()</code> builds the week from your local data: totals, done and missed per subject, which sites you unlocked and your reasons, missed tasks, each day’s letter, focus time, mood, derailers and up to 8 log lines, plus next week’s deadlines.</li>
           <li>The service worker posts it to Onitry’s <code>/v1/review</code> (up to 2 minutes).</li>
           <li>Onitry (<code>ai/review.py</code>) sends it to Claude with a short coaching prompt, using its own API key. The model is <code>claude-opus-5-5</code> unless <code>ONITRY_REVIEW_MODEL</code> says otherwise. If the model declines, Anthropic’s server-side fallback retries on another model.</li>
           <li>The text comes back and is saved in <code>pl:reviews</code> under the week’s Monday.</li>
@@ -518,7 +539,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
         <ul>
           <li>All planner data stays in <code>chrome.storage.local</code> in your Chrome profile. There’s no account and no server.</li>
           <li>The only network calls go to <code>127.0.0.1</code> (Onitry on your own computer).</li>
-          <li>The one thing that leaves your computer is the weekly review, and only when you press the button: Onitry sends that week’s stats, including task titles, gate-pass reasons and journal lines, to the Claude API.</li>
+          <li>The one thing that leaves your computer is the weekly review, and only when you press the button: Onitry sends that week’s stats, including task titles, gate-pass reasons and log lines, to the Claude API.</li>
           <li>Onitry itself sends screenshots to Claude while it’s monitoring; that’s Onitry’s own behavior, configured in Onitry.</li>
         </ul>
       </section>
@@ -563,6 +584,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td>Alarm when a block ends</td><td>On</td><td>With a Test sound button</td></tr>
             <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
             <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
+            <tr><td>Ask how a block went</td><td>After every focus block</td><td>Only after Done, or never</td></tr>
             <tr><td>Daily break budget</td><td>45 min</td><td>Past it a break needs the off-switch code</td></tr>
             <tr><td>Off-switch code</td><td>None</td><td>4 to 6 digits, stored as a salted hash</td></tr>
             <tr><td>Weekly review reminder</td><td>Sunday evening</td><td>Friday, Saturday or off</td></tr>
@@ -580,7 +602,8 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>pl:tasks</code></td><td>Every task: title, subject, kind, due, plan, estimate, someday, done</td></tr>
             <tr><td><code>pl:focus</code></td><td>The running focus block, or nothing</td></tr>
             <tr><td><code>pl:sessions</code></td><td>Finished focus blocks (last 3000)</td></tr>
-            <tr><td><code>pl:journal</code></td><td>Log entries by date</td></tr>
+            <tr><td><code>pl:journal</code></td><td>Log entries by date (the old key name stays, so nothing is lost)</td></tr>
+            <tr><td><code>pl:activities</code></td><td>Activities: name, subject and reflections</td></tr>
             <tr><td><code>pl:eod</code></td><td>End-of-day check-ins by date</td></tr>
             <tr><td><code>pl:passes</code></td><td>Live gate passes: site → expiry</td></tr>
             <tr><td><code>pl:settings</code></td><td>Everything in ⚙</td></tr>

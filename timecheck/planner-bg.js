@@ -31,6 +31,7 @@
 
   async function boot() {
     await P.ensureSeeded();
+    await P.syncActivities();
     chrome.alarms.create(TICK, { periodInMinutes: 1 });
     const focus = await P.store.get(K.focus, null);
     PlanBg.focusActive = !!focus;
@@ -128,6 +129,7 @@
       taskId,
       title: String(title || (isBreak ? 'Break' : 'Focus')).slice(0, 200),
       course,
+      activityId: !isBreak && task ? task.activityId || null : null,
       kind: isBreak ? 'break' : 'focus',
       startedAt: now,
       endsAt: now + minutes * 60000,
@@ -144,7 +146,7 @@
     await P.store.set(K.focus, focus);
     PlanBg.focusActive = true;
     chrome.alarms.create(FOCUS_END, { when: focus.endsAt });
-    await P.log(isBreak ? `${P.fmtMinutes(minutes)} break` : `Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus');
+    await P.log(isBreak ? `${P.fmtMinutes(minutes)} break` : `Started ${P.fmtMinutes(minutes)} focus: ${focus.title}`, 'focus', Date.now(), focus.activityId);
     // A break pauses Onitry so it doesn't flag you for stepping away.
     if (isBreak && settings.onitry.enabled && !offNow) OnitryBridge.pause(settings.onitry, minutes);
     if (taskId) await P.updateTask(taskId, { plan: P.dateKey() });
@@ -175,6 +177,21 @@
     }
   }
 
+  // After a focus block, ask one line about how it went (setting: every block, only after Done, never).
+  async function askReflection(session, settings, outcome) {
+    if (session.kind === 'break' || settings.reflect === 'never') return;
+    if (outcome === 'switched' || outcome === 'skipped') return;
+    if (settings.reflect === 'done' && outcome !== 'done') return;
+    let id = session.activityId;
+    if (!id) {
+      const acts = await P.syncActivities();
+      const hit = acts.find((a) => a.key === P.actKey(session.title));
+      id = hit ? hit.id : null;
+    }
+    if (!id) return;
+    await P.store.update(K.meta, {}, (m) => ({ ...m, pendingReflection: { sessionId: session.id, activityId: id, title: session.title, minutes: session.minutes, onPct: session.onitry ? session.onitry.onPct : null, at: Date.now() } }));
+  }
+
   async function focusStop(outcome = 'stopped', { quiet = false, keepOnitry = false } = {}) {
     const focus = await P.store.get(K.focus, null);
     if (!focus) return { ok: false };
@@ -194,7 +211,7 @@
       }
       if (settings.onitry.autoStop && !keepOnitry) await OnitryBridge.stop(settings.onitry);
     }
-    const session = { id: focus.id, taskId: focus.taskId, title: focus.title, course: focus.course, kind: focus.kind || 'focus', start: focus.startedAt, end, minutes, planned: focus.minutes, outcome, onitry };
+    const session = { id: focus.id, taskId: focus.taskId, activityId: focus.activityId || null, title: focus.title, course: focus.course, kind: focus.kind || 'focus', start: focus.startedAt, end, minutes, planned: focus.minutes, outcome, onitry };
     await P.store.update(K.sessions, [], (all) => all.concat([session]).slice(-3000));
     if ((outcome === 'done' || (focus.kind === 'break' && outcome === 'timeup')) && focus.taskId) await P.updateTask(focus.taskId, { done: now });
     await P.store.set(K.focus, null);
@@ -206,7 +223,8 @@
     else if (!quiet) {
       const verb = outcome === 'done' ? '✓ Finished' : outcome === 'timeup' ? 'Time up on' : outcome === 'skipped' ? 'Skipped' : 'Stopped';
       const extra = onitry && onitry.onPct != null ? ` · Onitry: ${onitry.onPct}% on task` : '';
-      await P.log(`${verb} ${focus.title} after ${P.fmtMinutes(minutes)}${extra}`, outcome === 'done' ? 'done' : 'focus');
+      await P.log(`${verb} ${focus.title} after ${P.fmtMinutes(minutes)}${extra}`, outcome === 'done' ? 'done' : 'focus', Date.now(), focus.activityId);
+      await askReflection(session, settings, outcome);
     }
     await syncGuard(true);
     await updateFocusBadge();

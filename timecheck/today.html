@@ -26,12 +26,13 @@
 
 
     <section class="now-bar" id="nowBar" aria-live="polite"></section>
+    <section class="reflect-bar" id="reflectBar" hidden></section>
 
     <nav class="t-tabs" id="tabs" role="tablist">
       <button data-tab="today" class="on">Queue</button>
       <button data-tab="week">Week</button>
       <button data-tab="someday">Free time</button>
-      <button data-tab="journal">Journal</button>
+      <button data-tab="journal">Log</button>
     </nav>
 
     <main class="t-grid">
@@ -48,6 +49,7 @@
             <span id="arLen"></span>
             <button type="button" class="btn primary ar-add" id="arAdd">Add</button>
           </div>
+          <ul class="ar-sugg" id="arSugg" role="listbox" aria-label="Suggestions" hidden></ul>
           <div class="ar-opts">
             <span id="arType"></span>
             <span id="arSubject"></span>
@@ -90,12 +92,13 @@
 
       <section class="t-col card" data-col="journal">
         <div class="col-head">
-          <h2>Journal</h2>
+          <h2>Log</h2>
           <span class="col-meta" id="streak"></span>
         </div>
         <div class="stats" id="stats"></div>
         <section class="review" id="reviewCard"></section>
         <div class="eod" id="eodCard"></div>
+        <div class="log-about"><span>About</span><span id="logAbout"></span></div>
         <textarea class="log-input" id="logInput" rows="2" placeholder="What’s going on? Enter to log it with the time."></textarea>
         <ol class="journal-list" id="journalList"></ol>
         <div class="history" id="history"></div>
@@ -133,6 +136,20 @@
         </span>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="activityDialog" class="t-dialog wide">
+    <div class="act-head">
+      <h3 id="actName"></h3>
+      <span id="actCourse"></span>
+      <button class="icon-btn" id="actClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="act-stats" id="actStats"></div>
+    <div class="set-sec">Reflections</div>
+    <textarea class="log-input" id="actNote" rows="2" placeholder="How did it go? Enter to save it on this activity."></textarea>
+    <ol class="act-list" id="actNotes"></ol>
+    <div class="set-sec">Recent sessions</div>
+    <ol class="act-list" id="actSessions"></ol>
   </dialog>
 
   <dialog id="settingsDialog" class="t-dialog wide">
@@ -218,6 +235,13 @@
         <label>Check-in when idle every (min, 0 = off)<input type="number" name="checkinMinutes" min="0" max="240"></label>
         <label>Default block length (min)<input type="number" name="focusMinutes" min="5" max="240" step="5"></label>
       </div>
+      <label>Ask how a block went
+        <select name="reflect">
+          <option value="every">After every focus block</option>
+          <option value="done">Only after Done</option>
+          <option value="never">Never</option>
+        </select>
+      </label>
       <label class="check"><input type="checkbox" name="autoAdvance"> Run my schedule back to back: when a block ends, start the next one</label>
       <div class="check-row">
         <label class="check"><input type="checkbox" name="alarmSound"> Ring an alarm when a block ends</label>

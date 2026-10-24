@@ -22,6 +22,8 @@
     settings: P.DEFAULT_SETTINGS,
     onitry: null,
     reviews: {},
+    activities: [],
+    reflection: null,
     weekOffset: 0,
     tab: 'today',
     editId: null,
@@ -78,6 +80,27 @@
     return lab;
   }
 
+  const actById = (id) => state.activities.find((a) => a.id === id) || null;
+  const actByName = (name) => state.activities.find((a) => a.key === P.actKey(name)) || null;
+  const actOfTask = (t) => (t.kind === 'break' ? null : actById(t.activityId) || actByName(t.title));
+
+  // A name that opens its activity page (or plain text when it isn't an activity).
+  function nameEl(cls, text, act) {
+    if (!act) return el('div', cls, text);
+    const b = el('button', `${cls} name-link`, text);
+    b.type = 'button';
+    b.title = 'Open its page';
+    b.addEventListener('click', () => openActivity(act.id));
+    return b;
+  }
+
+  // Click a task's name: its activity page, or the editor for breaks.
+  function openTaskName(t) {
+    const a = actOfTask(t);
+    if (a) openActivity(a.id);
+    else openEdit(t.id);
+  }
+
   // ---------- theme ----------
 
   function applyTheme() {
@@ -102,6 +125,8 @@
     state.offUntil = (d[K.meta] || {}).offUntil || 0;
     state.settings = await P.getSettings();
     state.reviews = d[K.reviews] || {};
+    state.activities = d[K.activities] || [];
+    state.reflection = (d[K.meta] || {}).pendingReflection || null;
     if (!state.onitry) state.onitry = d[K.onitry] || null;
   }
 
@@ -128,6 +153,8 @@
     renderToday();
     renderAddRow();
     renderNow();
+    renderReflect();
+    if (openActId) renderActivity();
     renderWeek();
     renderSomeday();
     renderJournal();
@@ -228,7 +255,7 @@
       top.append(el('span', 'nb-label', '⏰ Time’s up'));
       const chip = courseChip(f.course);
       if (chip) top.append(chip);
-      info.append(top, el('div', 'nb-title', f.title));
+      info.append(top, nameEl('nb-title', f.title, f.kind === 'break' ? null : actById(f.activityId) || actByName(f.title)));
       const timer = el('div', 'nb-timer is-up', 'Done?');
       timer.id = 'focusTimer';
       const actions = el('div', 'nb-actions');
@@ -255,7 +282,7 @@
       top.append(el('span', 'nb-label', f.pausedAt ? '❚❚ Paused' : f.kind === 'break' ? 'Break' : 'Focusing'));
       const chip = courseChip(f.course);
       if (chip) top.append(chip);
-      info.append(top, el('div', 'nb-title', f.title));
+      info.append(top, nameEl('nb-title', f.title, f.kind === 'break' ? null : actById(f.activityId) || actByName(f.title)));
       const timer = el('div', 'nb-timer');
       timer.id = 'focusTimer';
       const actions = el('div', 'nb-actions');
@@ -292,7 +319,7 @@
       top.append(el('span', 'nb-label', next.start - nowMin > 10 ? `Next at ${P.hhmm(next.start)}` : 'Up next'));
       const chip = courseChip(next.task.course);
       if (chip) top.append(chip);
-      info.append(top, el('div', 'nb-title', next.task.title));
+      info.append(top, nameEl('nb-title', next.task.title, actOfTask(next.task)));
       const left = events.filter((e) => e.type === 'task').length; // the whole queue runs from one Start
       const actions = el('div', 'nb-actions');
       actions.append(actionBtn(left > 1 ? `Start (${left} blocks)` : 'Start', 'play', 'primary', () => startTask(next.task), state.settings.autoAdvance ? 'Runs your queue back to back' : ''));
@@ -450,7 +477,8 @@
 
     const body = el('div', 'task-body');
     const title = el('span', 'task-title', t.title);
-    title.addEventListener('click', () => openEdit(t.id));
+    title.addEventListener('click', () => openTaskName(t));
+    title.title = 'Open its page';
     body.append(title);
     const meta = el('div', 'task-meta');
     const chip = courseChip(t.course);
@@ -470,6 +498,11 @@
         toToday.addEventListener('click', () => P.updateTask(t.id, { plan: today() }).then(() => toast(`“${t.title}” is on today’s list`)));
         li.append(toToday);
       }
+      const edit = el('button', 'icon-btn small', null);
+      edit.title = 'Edit';
+      edit.innerHTML = InkIcons.svg('pen', 15);
+      edit.addEventListener('click', () => openEdit(t.id));
+      li.append(edit);
       const play = el('button', 'icon-btn small play', null);
       play.title = 'Start a focus block on this';
       play.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
@@ -671,8 +704,8 @@
     const body = el('div', 'q-body');
     const title = el('button', 'q-title', t.title);
     title.type = 'button';
-    title.title = 'Edit';
-    title.addEventListener('click', () => openEdit(t.id));
+    title.title = t.kind === 'break' ? 'Edit' : 'Open its page';
+    title.addEventListener('click', () => openTaskName(t));
     const meta = el('div', 'q-meta');
     meta.append(el('span', 'q-time', `${P.hhmm(ev.start)}–${P.hhmm(ev.end)}`));
     if (ev.pinned) {
@@ -779,7 +812,7 @@
 
   // ---------- the add row (under the list) ----------
 
-  const add = { due: null, at: null, free: false };
+  const add = { due: null, at: null, free: false, reuse: null };
   const defaultLen = () => (typeDrop.value === 'break' ? 10 : state.settings.focusMinutes);
   let lastDefault = 30;
   const lenStep = TCStepper.create({ value: 30, min: 5, max: 240, step: 5, unit: 'min', label: 'Length' });
@@ -933,12 +966,25 @@
 
   async function addBlocks(titles, asNext) {
     if (!titles.length) return;
+    // A suggestion that is already a task (homework due later, a Free time project): put that one in the queue.
+    const reuse = add.reuse && titles.length === 1 ? state.tasks.find((t) => t.id === add.reuse && !t.done) : null;
+    if (reuse && P.actKey(reuse.title) === P.actKey(titles[0])) {
+      const order = asNext ? P.nextOrder(state.tasks, today(), state.focus) : Date.now();
+      const patch = { plan: today(), someday: false, estimate: lenStep.value, course: subjectDrop.value || reuse.course || null, at: add.at || null, order };
+      $('#arName').value = ''; // cleared before the write finishes, so a quick next entry isn't wiped
+      Object.assign(add, { due: null, at: null, free: false, reuse: null });
+      renderAddRow();
+      await P.updateTask(reuse.id, patch);
+      toast(`“${reuse.title}” is in today’s queue`);
+      return;
+    }
+    add.reuse = null;
     const first = asNext ? P.nextOrder(state.tasks, today(), state.focus) - titles.length : Date.now();
     const tasks = titles.map((title, i) => newBlock(title, first + i));
-    await P.addTasks(tasks);
-    $('#arName').value = '';
-    Object.assign(add, { due: null, at: null, free: false });
+    $('#arName').value = ''; // cleared before the write finishes, so a quick next entry isn't wiped
+    Object.assign(add, { due: null, at: null, free: false, reuse: null });
     renderAddRow();
+    await P.addTasks(tasks);
     const later = tasks.length === 1 && tasks[0].due && tasks[0].due > P.addDays(today(), 1);
     toast(tasks.length > 1 ? `Added ${tasks.length} blocks` : later ? `Added “${tasks[0].title}” for ${P.relDay(tasks[0].due)}. Find it in Week.` : `Added “${tasks[0].title}”`, {
       action: 'Undo',
@@ -1072,7 +1118,7 @@
 
   // ---------- journal ----------
 
-  const KIND_ICON = { log: '✎', focus: '▶', done: '✓', pass: '🔓', eod: '🌙', nudge: '🔔', system: '·' };
+  const KIND_ICON = { reflect: '💭', log: '✎', focus: '▶', done: '✓', pass: '🔓', eod: '🌙', nudge: '🔔', system: '·' };
 
   function dayStats(k) {
     const start = P.fromKey(k).getTime();
@@ -1105,6 +1151,7 @@
     for (let d = state.eod[k] ? k : P.addDays(k, -1); state.eod[d]; d = P.addDays(d, -1)) streak++;
     $('#streak').textContent = streak ? `🌙 ${streak}-day check-in streak` : '';
 
+    renderAbout();
     renderEod();
     renderReview();
 
@@ -1236,8 +1283,30 @@
 
   function entryRow(e) {
     const li = el('li', `entry ${e.kind}`);
-    li.append(el('span', 'e-time', P.fmtTime(e.t)), el('span', 'e-kind', KIND_ICON[e.kind] || '·'), el('span', 'e-text', e.text));
+    const text = el('span', 'e-text', e.text);
+    const a = e.act ? actById(e.act) : null;
+    if (a && !e.text.includes(a.name)) text.append(actLink(a));
+    li.append(el('span', 'e-time', P.fmtTime(e.t)), el('span', 'e-kind', KIND_ICON[e.kind] || '·'), text);
     return li;
+  }
+
+  function actLink(a) {
+    const b = el('button', 'e-act', a.name);
+    b.type = 'button';
+    b.title = 'Open its page';
+    b.addEventListener('click', () => openActivity(a.id));
+    return b;
+  }
+
+  // Which activity a note is about: a dropdown above the box.
+  const aboutDrop = TCMenu.dropdown({ options: [{ value: '', label: 'Nothing in particular' }], value: '', label: 'About' });
+  $('#logAbout').append(aboutDrop.el);
+  function renderAbout() {
+    const recent = new Map();
+    for (const s of state.sessions) if (s.activityId) recent.set(s.activityId, Math.max(recent.get(s.activityId) || 0, s.end));
+    const acts = state.activities.slice().sort((a, b) => (recent.get(b.id) || b.created || 0) - (recent.get(a.id) || a.created || 0)).slice(0, 60);
+    const cur = acts.some((a) => a.id === aboutDrop.value) ? aboutDrop.value : '';
+    aboutDrop.set(cur, [{ value: '', label: 'Nothing in particular' }, ...acts.map((a) => ({ value: a.id, label: a.name, color: a.course ? P.courseColor(state.settings.courses, a.course) : null }))]);
   }
 
   $('#logInput').addEventListener('keydown', async (e) => {
@@ -1245,8 +1314,9 @@
     e.preventDefault();
     const v = e.target.value.trim();
     if (!v) return;
-    await P.log(v, 'log');
+    await P.log(v, 'log', Date.now(), aboutDrop.value || null);
     e.target.value = '';
+    aboutDrop.set('');
   });
 
   const DERAILS = ['YouTube', 'Phone', 'Tired', 'Sick', 'Too much at once', 'Didn’t know what to do', 'Friends', 'Gaming'];
@@ -1719,6 +1789,202 @@
   // Enter in a code box shouldn't save and close the whole settings dialog.
   for (const id of ['#offOld', '#offNew', '#offUse']) $(id).addEventListener('keydown', (e) => e.key === 'Enter' && e.preventDefault());
 
+  // ---------- activity page ----------
+
+  let openActId = null;
+
+  function openActivity(id) {
+    if (!actById(id)) return;
+    openActId = id;
+    renderActivity();
+    $('#activityDialog').showModal();
+  }
+
+  function renderActivity() {
+    const a = actById(openActId);
+    if (!a) return;
+    const st = P.activityStats(a, state.sessions);
+    $('#actName').textContent = a.name;
+    const cc = $('#actCourse');
+    cc.textContent = '';
+    const chip = courseChip(a.course);
+    if (chip) cc.append(chip);
+    const stats = $('#actStats');
+    stats.textContent = '';
+    const cell = (n, label) => {
+      const c = el('div', 'stat');
+      c.append(el('b', null, n), el('span', null, label));
+      return c;
+    };
+    stats.append(cell(P.fmtMinutes(st.week), 'this week'), cell(P.fmtMinutes(st.total), 'all time'), cell(String(st.blocks), st.blocks === 1 ? 'block' : 'blocks'));
+    if (st.onPct != null) stats.append(cell(`${st.onPct}%`, 'on task (Onitry)'));
+    if (st.usual) stats.append(cell(P.fmtMinutes(st.usual), 'usual length'));
+    if (st.last) stats.append(cell(P.ago(st.last), 'last done'));
+
+    // Reflections plus the Log notes written about it, newest first.
+    const notes = (a.reflections || []).map((r) => ({ at: r.at, text: r.text, meta: [r.minutes ? P.fmtMinutes(r.minutes) : null, r.onPct != null ? `${r.onPct}% on task` : null].filter(Boolean).join(' · ') }));
+    for (const day of Object.values(state.journal)) for (const e of day) if (e.act === a.id && e.kind === 'log') notes.push({ at: e.t, text: e.text, meta: 'note' });
+    notes.sort((x, y) => y.at - x.at);
+    const nl = $('#actNotes');
+    nl.textContent = '';
+    for (const n of notes) {
+      const li = el('li', 'act-note');
+      li.append(el('div', 'act-text', n.text));
+      const day = P.relDay(P.dateKey(new Date(n.at)));
+      li.append(el('div', 'act-meta', [day, P.fmtTime(n.at), n.meta].filter(Boolean).join(' · ')));
+      nl.append(li);
+    }
+    if (!notes.length) nl.append(el('li', 'empty', 'Nothing written yet. A line after each block builds up here.'));
+
+    const sl = $('#actSessions');
+    sl.textContent = '';
+    for (const x of st.recent) {
+      const li = el('li', 'act-sess');
+      const outcome = { done: 'done', timeup: 'time up', stopped: 'stopped', switched: 'switched', skipped: 'skipped' }[x.outcome] || x.outcome;
+      li.append(el('span', 'act-when', `${P.relDay(P.dateKey(new Date(x.end)))} ${P.fmtTime(x.end)}`), el('b', null, P.fmtMinutes(x.minutes)), el('span', 'act-meta', [outcome, x.onitry && x.onitry.onPct != null ? `${x.onitry.onPct}% on task` : null].filter(Boolean).join(' · ')));
+      sl.append(li);
+    }
+    if (!st.recent.length) sl.append(el('li', 'empty', 'No finished blocks yet.'));
+  }
+
+  $('#actClose').addEventListener('click', () => $('#activityDialog').close());
+  $('#activityDialog').addEventListener('close', () => (openActId = null));
+  $('#actNote').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    const text = e.target.value.trim();
+    if (!text || !openActId) return;
+    await P.addReflection(openActId, { text });
+    e.target.value = '';
+    await load();
+    renderActivity();
+  });
+
+  // ---------- "How did it go?" after a block ----------
+
+  function renderReflect() {
+    const bar = $('#reflectBar');
+    const r = state.reflection;
+    if (!r) {
+      bar.hidden = true;
+      bar.textContent = '';
+      bar.dataset.sid = '';
+      return;
+    }
+    if (bar.dataset.sid === r.sessionId && !bar.hidden) return; // keep what's being typed
+    bar.dataset.sid = r.sessionId;
+    bar.hidden = false;
+    bar.textContent = '';
+    const act = actById(r.activityId);
+    const q = el('div', 'rf-q');
+    q.append('How did ', el('b', null, act ? act.name : r.title), ' go?');
+    const detail = [r.minutes ? P.fmtMinutes(r.minutes) : null, r.onPct != null ? `${r.onPct}% on task` : null].filter(Boolean).join(' · ');
+    if (detail) q.append(el('span', 'rf-meta', ` ${detail}`));
+    const input = el('input', 'rf-input');
+    input.placeholder = 'One line. Enter to save.';
+    input.maxLength = 500;
+    input.setAttribute('aria-label', 'How did it go?');
+    const clear = () => P.store.update(K.meta, {}, (m) => ({ ...m, pendingReflection: null }));
+    const save = el('button', 'btn primary', 'Save');
+    save.type = 'button';
+    const skip = el('button', 'btn ghost', 'Skip');
+    skip.type = 'button';
+    const doSave = async () => {
+      const text = input.value.trim();
+      if (!text) return input.focus();
+      await P.addReflection(r.activityId, { text, minutes: r.minutes, onPct: r.onPct, sessionId: r.sessionId });
+      await clear();
+    };
+    save.addEventListener('click', doSave);
+    skip.addEventListener('click', clear);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSave();
+      } else if (e.key === 'Escape') clear();
+    });
+    const row = el('div', 'rf-row');
+    row.append(input, save, skip);
+    bar.append(q, row);
+  }
+
+  // ---------- add row: suggestions as you type ----------
+
+  let suggestions = [];
+  let suggIndex = -1;
+  const suggBox = $('#arSugg');
+
+  function closeSuggestions() {
+    suggestions = [];
+    suggIndex = -1;
+    suggBox.hidden = true;
+    suggBox.textContent = '';
+  }
+
+  function updateSuggestions() {
+    const q = $('#arName').value;
+    suggestions = P.suggest(q, state.activities, state.sessions, state.tasks);
+    suggIndex = -1;
+    suggBox.textContent = '';
+    suggBox.hidden = !suggestions.length;
+    suggestions.forEach((r, i) => {
+      const li = el('li', 'sg');
+      li.setAttribute('role', 'option');
+      li.dataset.i = String(i);
+      const dot = el('i', 'tc-dot');
+      dot.style.background = r.activity.course ? P.courseColor(state.settings.courses, r.activity.course) : 'var(--muted)';
+      const body = el('div', 'sg-body');
+      const top = el('div', 'sg-top');
+      top.append(el('b', 'sg-name', r.activity.name));
+      if (r.tag) top.append(el('span', 'sg-tag', r.tag));
+      const bits = [r.stats.usual ? P.fmtMinutes(r.stats.usual) : null, r.stats.last ? `last ${P.ago(r.stats.last)}` : null, r.stats.total ? `${P.fmtMinutes(r.stats.total)} total` : null].filter(Boolean);
+      body.append(top);
+      if (bits.length) body.append(el('div', 'sg-meta', bits.join(' · ')));
+      li.append(dot, body);
+      li.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the name field
+      li.addEventListener('click', () => pickSuggestion(i));
+      suggBox.append(li);
+    });
+  }
+
+  function markSuggestion() {
+    $$('#arSugg .sg').forEach((li, i) => {
+      li.classList.toggle('on', i === suggIndex);
+      li.setAttribute('aria-selected', String(i === suggIndex));
+    });
+  }
+
+  // Picking fills the name, subject and usual length; Add then puts it in the queue.
+  function pickSuggestion(i) {
+    const r = suggestions[i];
+    if (!r) return;
+    $('#arName').value = r.activity.name;
+    subjectDrop.set(state.settings.courses.some((c) => c.name === r.activity.course) ? r.activity.course : '', subjectOptions());
+    lenStep.set(r.stats.usual || (r.task && r.task.estimate) || defaultLen(), { silent: true });
+    add.reuse = r.task && !P.queueIds(state.tasks, today(), state.focus).includes(r.task.id) ? r.task.id : null;
+    closeSuggestions();
+    $('#arName').focus();
+  }
+
+  $('#arName').addEventListener('input', updateSuggestions);
+  $('#arName').addEventListener('blur', () => setTimeout(closeSuggestions, 120));
+  $('#arName').addEventListener('keydown', (e) => {
+    if (!suggestions.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      suggIndex = (suggIndex + (e.key === 'ArrowDown' ? 1 : -1) + suggestions.length + 1) % (suggestions.length + 1);
+      if (suggIndex === suggestions.length) suggIndex = -1;
+      markSuggestion();
+    } else if (e.key === 'Enter' && suggIndex >= 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      pickSuggestion(suggIndex);
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeSuggestions();
+    }
+  }, true);
+
   // ---------- settings ----------
 
   function openSettings(focus) {
@@ -1732,6 +1998,7 @@
     f.focusMinutes.value = s.focusMinutes;
     f.autoAdvance.checked = s.autoAdvance;
     f.breakBudget.value = s.breakBudget;
+    f.reflect.value = s.reflect;
     renderOffSettings();
     f.alarmSound.checked = s.alarmSound;
     f.onitryEnabled.checked = s.onitry.enabled;
@@ -1864,6 +2131,7 @@
       focusMinutes: Number(f.focusMinutes.value) || 40,
       autoAdvance: f.autoAdvance.checked,
       breakBudget: Math.max(0, Math.min(240, Number(f.breakBudget.value) || 0)),
+      reflect: f.reflect.value,
       alarmSound: f.alarmSound.checked,
       courses: courses.length ? courses : P.DEFAULT_COURSES,
       placement: f.placement.value || 'panel',
@@ -1955,9 +2223,10 @@
   async function init() {
     for (const n of $$('[data-icon]')) n.insertAdjacentHTML('afterbegin', InkIcons.svg(n.dataset.icon, Number(n.dataset.size) || 18));
     await P.ensureSeeded();
+    await P.syncActivities();
     await load();
     applyTheme();
-    setTab(/eod|journal|review/.test(location.hash) ? 'journal' : 'today');
+    setTab(/eod|journal|log|review/.test(location.hash) ? 'journal' : 'today');
     P.store.update(K.meta, {}, (m) => (m.plannerOpened ? m : { ...m, plannerOpened: Date.now() }));
     // Links from the guide: today.html#blocks, #settings
     if (location.hash === '#blocks') openBlocksEditor();

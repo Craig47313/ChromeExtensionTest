@@ -1,6 +1,6 @@
 // The distraction gate. Gated sites are redirected here (see planner-bg.js);
 // the original URL is in location.hash. Getting through takes a written reason
-// (logged to the journal), a wait, and during focus blocks a typed sentence.
+// (logged to the log), a wait, and during focus blocks a typed sentence.
 (async () => {
   'use strict';
 
