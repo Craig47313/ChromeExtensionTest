@@ -1529,6 +1529,7 @@
       graphEl: $('#calcGraph'),
       onChange: scheduleSave,
     });
+    calc.setTypeset(state.settings.typesetMath !== false);
     applyTheme();
     return calc;
   }
@@ -1853,6 +1854,7 @@
 
   function renderAppearance() {
     for (const b of $$('#themeSeg button')) b.classList.toggle('on', b.dataset.theme === (state.settings.theme || 'system'));
+    $('#typesetMath').checked = state.settings.typesetMath !== false;
     const grid = $('#paletteGrid');
     grid.textContent = '';
     const current = state.settings.palette || InkPalettes.DEFAULT;
@@ -1885,6 +1887,11 @@
       renderAppearance();
     });
   }
+
+  $('#typesetMath').addEventListener('change', async (e) => {
+    state.settings = await Store.setSettings({ typesetMath: e.target.checked });
+    if (calc) calc.setTypeset(state.settings.typesetMath !== false);
+  });
 
   // ---------- cross-view sync ----------
 
@@ -1921,6 +1928,7 @@
       } else if (key === 'settings' && newValue) {
         state.settings = newValue;
         applyTheme();
+        if (calc) calc.setTypeset(state.settings.typesetMath !== false);
       }
     }
     if (listChanged) renderList();

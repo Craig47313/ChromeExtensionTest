@@ -1,4 +1,4 @@
-// Run with: node --test tests/
+// Run with: node --test tests/*.test.js
 // Every file in shared/ must be byte-identical in both extensions' lib/ folders. Fix drift with scripts/sync-shared.sh.
 const test = require('node:test');
 const assert = require('node:assert');

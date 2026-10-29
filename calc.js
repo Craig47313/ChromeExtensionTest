@@ -39,6 +39,7 @@
       this.rows = [];
       this.settings = { ...DEFAULT_SETTINGS };
       this.dark = false;
+      this.typeset = true; // show rows as typeset math (fractions, roots, ∫, d/dx) instead of plain text
       this.results = [];
       this.els = new Map(); // row id → elements
       this.graph = new GraphView(canvas, {
@@ -56,6 +57,14 @@
         this.focusRow(this.rows[this.rows.length - 1].id);
       });
       this._buildControls();
+      rowsEl.classList.add('calc-typeset');
+    }
+
+    // Typeset rows on or off (a setting). Rows keep their plain text either way.
+    setTypeset(on) {
+      this.typeset = !!on;
+      this.rowsEl.classList.toggle('calc-typeset', this.typeset);
+      this._renderAllMath();
     }
 
     // ---------- data ----------
@@ -214,12 +223,17 @@
         this.update();
         this.onChange();
       });
+      const math = el('div', { class: 'row-math', title: 'Click to edit' });
+      math.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        this.focusRow(row.id);
+      });
       const input = el('input', { class: 'row-input', value: row.text, spellcheck: false, autocomplete: 'off' });
       const extra = el('div', { class: 'row-extra' });
       const del = el('button', { class: 'row-del', title: 'Delete expression', html: InkIcons.svg('x', 18) });
       del.setAttribute('aria-label', 'Delete expression');
       del.addEventListener('click', () => this.deleteRow(row.id));
-      const node = el('div', { class: 'calc-row' }, [el('div', { class: 'row-gutter' }, [num, icon]), el('div', { class: 'row-main' }, [input, extra]), del]);
+      const node = el('div', { class: 'calc-row' }, [el('div', { class: 'row-gutter' }, [num, icon]), el('div', { class: 'row-main' }, [math, input, extra]), del]);
       node.dataset.id = row.id;
 
       input.addEventListener('input', () => {
@@ -240,7 +254,8 @@
         const i = this.rows.indexOf(row);
         if (i >= 0 && this.results[i]) this._renderExtra(row, this.results[i], this.els.get(row.id));
       });
-      this.els.set(row.id, { el: node, num, icon, input, extra });
+      this.els.set(row.id, { el: node, num, icon, input, extra, math });
+      this._renderMath(row);
       return node;
     }
 
@@ -265,9 +280,27 @@
       }
     }
 
+    // The typeset view of one row (MathML from the plain text), or nothing if it can't be read yet.
+    _renderMath(row, texts = this.rows.map((r) => r.text)) {
+      const e = this.els.get(row.id);
+      if (!e) return;
+      const html = this.typeset ? InkMath.typeset(row.text, texts) : null;
+      if (e.math.dataset.src !== (html || '')) {
+        e.math.innerHTML = html || '';
+        e.math.dataset.src = html || '';
+      }
+      e.el.classList.toggle('has-math', !!html);
+    }
+
+    _renderAllMath() {
+      const texts = this.rows.map((r) => r.text);
+      for (const row of this.rows) this._renderMath(row, texts);
+    }
+
     // Re-evaluate everything and refresh results, icons and the graph.
     update({ skip } = {}) {
       this.results = InkMath.evaluate(this.rows, { angle: this.settings.angle });
+      this._renderAllMath();
       const items = [];
       this.rows.forEach((row, i) => {
         const res = this.results[i];
@@ -300,6 +333,7 @@
       }
 
       extra.textContent = '';
+      if (res.symbolic && res.kind !== 'error') extra.appendChild(el('div', { class: 'row-sym', title: 'The derivative, worked out', html: `<span class="eq">=</span>${InkMath.toMathML(res.symbolic)}` }));
       if (res.kind === 'value' || (res.kind === 'def' && res.value !== undefined)) {
         const val = el('span', { class: 'val' }, InkMath.format(res.value));
         const out = el('button', { class: 'row-result', title: 'Copy result', html: '<span class="eq">=</span>' }, val);
