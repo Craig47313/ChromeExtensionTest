@@ -5,7 +5,7 @@ importScripts('lib/store.js');
 // Timecheck (the planner extension) has a fixed ID, so only it can talk to us and we can introduce ourselves.
 const TIMECHECK_ID = 'dadagbofodnllhcohbhmjkdolklihcgn';
 
-const ANNOTATOR_FILES = ['lib/icons.js', 'lib/palettes.js', 'lib/ink-canvas.js', 'content/annotate.js'];
+const ANNOTATOR_FILES = ['lib/icons.js', 'lib/palettes.js', 'lib/crop.js', 'lib/ink-canvas.js', 'content/annotate.js'];
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 

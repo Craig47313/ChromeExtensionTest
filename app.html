@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inkwell</title>
   <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="lib/controls.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -89,6 +90,7 @@
             <div id="rich" class="rich" contenteditable="true" spellcheck="true" data-placeholder="Start writing…" aria-label="Note body"></div>
             <div id="figTools" class="fig-tools" hidden>
               <button data-fig="edit" data-icon="edit" data-size="16" title="Edit sketch">Edit</button>
+              <button data-fig="crop" data-icon="crop" data-size="16" title="Crop this image">Crop</button>
               <button data-fig="delete" data-icon="trash" data-size="16" title="Remove"></button>
             </div>
           </div>
@@ -103,6 +105,12 @@
             <span data-icon="sticky" data-size="16"></span>
             <span>Editing a sketch in this note</span>
             <button class="btn primary" id="sketchDoneBtn" data-icon="check">Done</button>
+          </div>
+          <div id="cropHint" class="sketch-bar crop-hint" hidden>
+            <span data-icon="crop" data-size="16"></span>
+            <span>Crop: drag the handles or the picture · Shift keeps the shape · Enter applies · Esc cancels</span>
+            <button class="btn" id="cropResetBtn" type="button">Reset</button>
+            <button class="btn primary" id="cropApplyBtn" type="button" data-icon="check">Apply</button>
           </div>
           <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
             <div class="tool-group" id="toolGroup">
@@ -200,12 +208,47 @@
     </form>
   </dialog>
 
+  <dialog id="cropDialog" class="crop-dialog">
+    <h3>Crop image</h3>
+    <div class="crop-stage">
+      <div class="crop-inner" id="cropStage">
+        <canvas id="cropCanvas"></canvas>
+        <div class="crop-box" id="cropBox">
+          <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="w"></i><i data-h="e"></i><i data-h="sw"></i><i data-h="s"></i><i data-h="se"></i>
+        </div>
+      </div>
+    </div>
+    <div class="crop-controls">
+      <div class="gs-seg" id="cropAspect" role="group" aria-label="Shape">
+        <button type="button" data-aspect="free">Free</button>
+        <button type="button" data-aspect="original">Original</button>
+        <button type="button" data-aspect="1:1">1:1</button>
+        <button type="button" data-aspect="4:3">4:3</button>
+        <button type="button" data-aspect="16:9">16:9</button>
+      </div>
+      <div class="crop-size">
+        <label>Width <span id="cropW"></span></label>
+        <label>Height <span id="cropH"></span></label>
+        <button type="button" class="btn" id="cropRotate" data-icon="rotate" title="Rotate 90°">Rotate</button>
+      </div>
+    </div>
+    <div class="dialog-actions spread">
+      <button type="button" class="btn" id="cropReset">Reset</button>
+      <span>
+        <button type="button" class="btn" id="cropCancel">Cancel</button>
+        <button type="button" class="btn primary" id="cropApply">Apply</button>
+      </span>
+    </div>
+  </dialog>
+
   <input type="file" id="importInput" accept="application/json,.json" hidden>
   <input type="file" id="imageInput" accept="image/*" hidden>
 
   <script src="lib/icons.js"></script>
   <script src="lib/palettes.js"></script>
   <script src="lib/store.js"></script>
+  <script src="lib/stepper.js"></script>
+  <script src="lib/crop.js"></script>
   <script src="lib/ink-canvas.js"></script>
   <script src="lib/mathlib.js"></script>
   <script src="lib/graph.js"></script>

@@ -43,8 +43,16 @@ Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a De
 - Define your own functions and reuse them: `g(t) = 2t` then `g(4)`
 - Implicit multiplication (`2x`, `3(x+1)`, `2pi`), `|x|`, `5!`, `%`, and functions such as `sin cos tan asin acos atan sqrt cbrt ln log exp abs floor ceil round min max mod gcd lcm nCr nPr`.
 - Drag to pan and scroll to zoom. Hover over a curve to see coordinates. Click a row's color dot to hide that curve, or right-click it to change the color.
+- **Derivatives:** `d/dx x^2`, `d/dx sin(2x)`, `diff(x^3, x)`, or `f'(x)` / `f''(x)` for a function you defined. They're exact (product, quotient, chain and power rules; degrees mode is respected), graphed like any curve, and the row shows the derivative it worked out (`d/dx x^3` shows `3x²`). `d/dx` takes the whole product after it, so `d/dx 5x` is 5; use brackets for quotients, `d/dx (1/x)`.
+- **Integrals:** `int(x^2, x, 0, 1)` or `int_0^1 x^2 dx` (also `∫`, `integral`). Bounds can be `inf` or `∞`, and a bound can be `x`, so `F(x) = int(sin(t), t, 0, x)` draws the area function. Computed numerically (adaptive Gauss–Kronrod).
+- **Typeset rows:** each row is drawn like LaTeX: fractions, roots, exponents, `∫` with limits, `d/dx`, Greek names. Click a row to edit its plain text (a typeset preview shows underneath). **Appearance → Calculator** turns this off for plain text rows.
 - Download the graph as a PNG, or copy the expressions
 - Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer. Press Enter to copy it, or Ctrl+Enter to open it in Quick calc.
+
+**Crop images**
+- In a note, hover an image and press **Crop** (or double-click it). The crop window has a draggable box, aspect buttons (Free, Original, 1:1, 4:3, 16:9), width and height steppers in pixels, **Rotate**, **Reset**, **Cancel** and **Apply**.
+- Apply replaces the image with the cropped one. The original is kept beside the note, so you can re-crop later, **Reset** to bring it back, or press **Undo** in the toast.
+- In drawings, stickies and sketches, double-click an image (or select it and press **Enter**) and drag the handles: hold **Shift** to keep the shape, **Enter** applies, **Esc** cancels. Nothing is cut out: the image keeps all its pixels and is drawn through a crop rectangle, so you can widen it again. A crop is one undo step and shows in PNG export and copy as image.
 
 **Timecheck (optional)**
 - If the Timecheck planner extension is also installed, Inkwell introduces itself and Timecheck asks you to approve it. After that:
@@ -128,7 +136,8 @@ background.js         service worker: side panel, context menus, commands, scree
 app.html/.css/.js     the notes app (side panel and full tab)
 calc.js               calculator editor (expression rows, sliders, graph settings)
 lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/sketches)
-lib/mathlib.js        safe math parser/evaluator (no eval)
+lib/mathlib.js        safe math parser/evaluator (no eval): derivatives, integrals, typesetting
+lib/crop.js           crop geometry (crop window and drawing images)
 lib/graph.js          graph renderer with points of interest
 lib/palettes.js       color palettes (copy of shared/palettes.js)
 timecheck/            separate extension: Timecheck (planner)

@@ -261,7 +261,7 @@
         const value = attr.value.trim();
         let keep = false;
         if (tag === 'A' && name === 'href') keep = /^(https?:|mailto:)/i.test(value);
-        else if (tag === 'FIGURE' && name === 'data-sketch') keep = /^[a-z0-9]{4,40}$/.test(value);
+        else if (tag === 'FIGURE' && (name === 'data-sketch' || name === 'data-img')) keep = /^[a-z0-9]{4,40}$/.test(value);
         else if (tag === 'FIGURE' && name === 'class') {
           keep = value === 'sketch' || value === 'media';
         } else if (tag === 'IMG' && name === 'src') keep = /^data:image\/(png|jpe?g|gif|webp);/i.test(value) || /^https:\/\//i.test(value);
@@ -802,6 +802,7 @@
         note.html = serializeRich();
         note.text = els.rich.innerText.replace(/\s+/g, ' ').trim();
         pruneSketches(note);
+        pruneOriginals(note);
       }
       note.updated = Date.now();
       note.lastEditor = INSTANCE;
@@ -1201,6 +1202,14 @@
     scheduleSave();
   }
 
+  // The untouched original of a cropped image is kept beside the note; drop it once the image is gone.
+  function pruneOriginals(note) {
+    if (!note.originals) return;
+    const used = new Set([...els.rich.querySelectorAll('figure[data-img]')].map((f) => f.dataset.img));
+    for (const id of Object.keys(note.originals)) if (!used.has(id)) delete note.originals[id];
+    if (!Object.keys(note.originals).length) delete note.originals;
+  }
+
   function pruneSketches(note) {
     if (!note.sketches) return;
     const used = new Set([...els.rich.querySelectorAll('figure[data-sketch]')].map((f) => f.dataset.sketch));
@@ -1302,6 +1311,7 @@
     const sr = scroller.getBoundingClientRect();
     els.figTools.hidden = false;
     els.figTools.querySelector('[data-fig="edit"]').hidden = !fig.classList.contains('sketch');
+    els.figTools.querySelector('[data-fig="crop"]').hidden = !canCrop(fig);
     els.figTools.style.top = `${fr.top - sr.top + scroller.scrollTop + 8}px`;
     els.figTools.style.left = `${fr.right - sr.left - 8}px`;
   });
@@ -1314,6 +1324,7 @@
     const fig = hoverFig;
     if (!b || !fig) return;
     if (b.dataset.fig === 'edit') openSketch(fig.dataset.sketch);
+    else if (b.dataset.fig === 'crop') openCrop(fig);
     else {
       fig.remove();
       hoverFig = null;
@@ -1325,11 +1336,221 @@
   els.rich.addEventListener('dblclick', (e) => {
     const fig = e.target.closest('figure.sketch');
     if (fig) openSketch(fig.dataset.sketch);
+    const pic = e.target.closest('figure.media');
+    if (pic && canCrop(pic)) openCrop(pic);
   });
+
+  // ---------- crop window (images in notes) ----------
+  // Apply draws the chosen part into a new image that replaces the old one. The untouched original is saved once
+  // beside the note (note.originals), with the box and turn that made the crop, so it can be re-cropped or reset.
+
+  const canCrop = (fig) => fig.classList.contains('media') && /^data:image\//.test((fig.querySelector('img') || {}).src || '');
+  const cropWin = { open: false };
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Couldn’t read that image'));
+      img.src = src;
+    });
+  }
+
+  // The original turned by `rot` degrees clockwise, as a canvas.
+  function turnedCanvas(img, rot) {
+    const sideways = rot % 180 !== 0;
+    const c = document.createElement('canvas');
+    c.width = sideways ? img.naturalHeight : img.naturalWidth;
+    c.height = sideways ? img.naturalWidth : img.naturalHeight;
+    const ctx = c.getContext('2d');
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+    return c;
+  }
+
+  async function openCrop(fig) {
+    const note = currentNote();
+    const shown = fig.querySelector('img');
+    if (!note || note.type !== 'text' || !shown || cropWin.open) return;
+    const id = fig.dataset.img || Store.newId();
+    fig.dataset.img = id;
+    note.originals = note.originals || {};
+    const saved = note.originals[id] || { src: shown.src, rot: 0, rect: null };
+    let img;
+    try {
+      img = await loadImage(saved.src);
+    } catch (err) {
+      toast(err.message);
+      return;
+    }
+    const Crop = InkCrop;
+    const dlg = $('#cropDialog');
+    const canvas = $('#cropCanvas');
+    const box = $('#cropBox');
+    const st = { rot: saved.rot || 0, aspect: 'free', rect: null, drag: null };
+    let base = turnedCanvas(img, st.rot);
+    let W = base.width;
+    let H = base.height;
+    st.rect = saved.rect && saved.rect.x + saved.rect.w <= W + 0.5 && saved.rect.y + saved.rect.h <= H + 0.5 ? { ...saved.rect } : Crop.full(W, H);
+    let scale = 1;
+
+    const ratio = () => {
+      if (st.aspect === 'free') return null;
+      if (st.aspect === 'original') return W / H;
+      const r = Crop.ASPECTS[st.aspect];
+      return st.rect.h > st.rect.w ? 1 / r : r; // 4:3 turns into 3:4 for a tall box
+    };
+
+    const wStep = TCStepper.create({ value: 100, min: 8, max: 8000, step: 10, unit: 'px', label: 'Crop width in pixels', onChange: (v) => setSize({ w: v }) });
+    const hStep = TCStepper.create({ value: 100, min: 8, max: 8000, step: 10, unit: 'px', label: 'Crop height in pixels', onChange: (v) => setSize({ h: v }) });
+    $('#cropW').replaceChildren(wStep.el);
+    $('#cropH').replaceChildren(hStep.el);
+
+    function paint() {
+      const r = st.rect;
+      box.style.left = `${r.x * scale}px`;
+      box.style.top = `${r.y * scale}px`;
+      box.style.width = `${r.w * scale}px`;
+      box.style.height = `${r.h * scale}px`;
+      wStep.set(Math.round(r.w), { silent: true });
+      hStep.set(Math.round(r.h), { silent: true });
+      for (const b of $$('#cropAspect button')) b.classList.toggle('on', b.dataset.aspect === st.aspect);
+    }
+
+    function drawBase() {
+      const maxW = Math.min(560, window.innerWidth - 64);
+      const maxH = Math.min(340, window.innerHeight - 300);
+      scale = Math.min(maxW / W, maxH / H);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(W * scale * dpr);
+      canvas.height = Math.round(H * scale * dpr);
+      canvas.style.width = `${W * scale}px`;
+      canvas.style.height = `${H * scale}px`;
+      $('#cropStage').style.width = `${W * scale}px`;
+      $('#cropStage').style.height = `${H * scale}px`;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+      wStep.input.max = String(W);
+      paint();
+    }
+
+    function setSize(patch) {
+      st.rect = Crop.setSize(st.rect, patch, W, H, ratio());
+      paint();
+    }
+
+    function setAspect(a) {
+      st.aspect = a;
+      st.rect = Crop.aspect(st.rect, ratio(), W, H);
+      paint();
+    }
+
+    // dragging
+    const onMove = (e) => {
+      if (!st.drag) return;
+      const dx = (e.clientX - st.drag.x) / scale;
+      const dy = (e.clientY - st.drag.y) / scale;
+      st.rect = st.drag.handle === 'move' ? Crop.move(st.drag.base, dx, dy, W, H) : Crop.resize(st.drag.base, st.drag.handle, dx, dy, { W, H, ratio: ratio() || (e.shiftKey ? st.drag.base.w / st.drag.base.h : null) });
+      paint();
+    };
+    const onUp = () => {
+      st.drag = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      st.drag = { handle: e.target.dataset.h || 'move', x: e.clientX, y: e.clientY, base: { ...st.rect } };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+    box.addEventListener('pointerdown', onDown);
+
+    const aspectClick = (e) => {
+      const b = e.target.closest('[data-aspect]');
+      if (b) setAspect(b.dataset.aspect);
+    };
+    $('#cropAspect').addEventListener('click', aspectClick);
+
+    const rotate = () => {
+      st.rot = (st.rot + 90) % 360;
+      st.rect = Crop.rotateRect(st.rect, W, H);
+      base = turnedCanvas(img, st.rot);
+      W = base.width;
+      H = base.height;
+      drawBase();
+    };
+    const reset = () => {
+      st.rot = 0;
+      st.aspect = 'free';
+      base = turnedCanvas(img, 0);
+      W = base.width;
+      H = base.height;
+      st.rect = Crop.full(W, H);
+      drawBase();
+    };
+    const close = () => {
+      cropWin.open = false;
+      onUp();
+      box.removeEventListener('pointerdown', onDown);
+      $('#cropAspect').removeEventListener('click', aspectClick);
+      $('#cropRotate').removeEventListener('click', rotate);
+      $('#cropReset').removeEventListener('click', reset);
+      $('#cropCancel').removeEventListener('click', close);
+      $('#cropApply').removeEventListener('click', apply);
+      dlg.removeEventListener('keydown', onKey);
+      dlg.removeEventListener('close', close);
+      if (dlg.open) dlg.close();
+    };
+    const apply = async () => {
+      const r = st.rect;
+      const out = document.createElement('canvas');
+      out.width = Math.max(1, Math.round(r.w));
+      out.height = Math.max(1, Math.round(r.h));
+      out.getContext('2d').drawImage(base, r.x, r.y, r.w, r.h, 0, 0, out.width, out.height);
+      const untouched = st.rot === 0 && r.x < 0.5 && r.y < 0.5 && r.w > W - 1 && r.h > H - 1;
+      const jpeg = /^data:image\/jpe?g/i.test(saved.src);
+      const prev = { src: shown.src, entry: note.originals[id] ? { ...note.originals[id] } : null };
+      shown.src = untouched ? saved.src : out.toDataURL(jpeg ? 'image/jpeg' : 'image/png', 0.92);
+      note.originals[id] = { src: saved.src, rot: st.rot, rect: untouched ? null : { x: r.x, y: r.y, w: r.w, h: r.h } };
+      scheduleSave();
+      close();
+      toast(untouched ? 'Back to the original' : 'Cropped', {
+        action: 'Undo',
+        onAction: () => {
+          shown.src = prev.src;
+          if (prev.entry) note.originals[id] = prev.entry;
+          else delete note.originals[id];
+          scheduleSave();
+        },
+      });
+    };
+    const onKey = (e) => {
+      if (e.key === 'Enter' && !e.target.closest('input, button')) {
+        e.preventDefault();
+        apply();
+      }
+    };
+    $('#cropRotate').addEventListener('click', rotate);
+    $('#cropReset').addEventListener('click', reset);
+    $('#cropCancel').addEventListener('click', close);
+    $('#cropApply').addEventListener('click', apply);
+    dlg.addEventListener('keydown', onKey);
+    dlg.addEventListener('close', close);
+    cropWin.open = true;
+    dlg.showModal();
+    drawBase();
+  }
 
   // ---------- drawing editor ----------
 
   let ink = null;
+
+  $('#cropApplyBtn').addEventListener('click', () => ink && ink.applyCrop());
+  $('#cropResetBtn').addEventListener('click', () => ink && ink.resetCrop());
 
   function ensureInk() {
     if (ink) return ink;
@@ -1346,6 +1567,9 @@
       onHistoryChange: syncDrawUI,
       onSelectionChange: syncDrawUI,
       onToolChange: syncDrawUI,
+      onCropChange: (on) => {
+        $('#cropHint').hidden = !on;
+      },
       onStyleChange: () => {
         syncDrawUI();
         persistDrawStyles();

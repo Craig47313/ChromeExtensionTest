@@ -555,3 +555,27 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
 .row-sym .eq { font-size: 16px; }
 .ap-check { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; font-size: 13px; line-height: 1.4; cursor: pointer; }
 .ap-check input { margin-top: 3px; accent-color: var(--accent); }
+
+/* Crop window */
+.crop-dialog { width: min(640px, calc(100vw - 24px)); padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.crop-dialog::backdrop { background: rgba(10, 10, 20, 0.4); }
+.crop-dialog h3 { margin: 0 0 10px; font-size: 16px; }
+.crop-stage { display: flex; justify-content: center; padding: 10px; margin-bottom: 8px; overflow: hidden; user-select: none; touch-action: none; }
+.crop-inner { position: relative; line-height: 0; background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.crop-stage canvas { display: block; }
+.crop-box { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); cursor: move; box-sizing: border-box; }
+.crop-box i { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid var(--accent); border-radius: 3px; box-sizing: border-box; }
+.crop-box i[data-h="nw"] { left: -8px; top: -8px; cursor: nwse-resize; }
+.crop-box i[data-h="n"] { left: calc(50% - 7px); top: -8px; cursor: ns-resize; }
+.crop-box i[data-h="ne"] { right: -8px; top: -8px; cursor: nesw-resize; }
+.crop-box i[data-h="w"] { left: -8px; top: calc(50% - 7px); cursor: ew-resize; }
+.crop-box i[data-h="e"] { right: -8px; top: calc(50% - 7px); cursor: ew-resize; }
+.crop-box i[data-h="sw"] { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.crop-box i[data-h="s"] { left: calc(50% - 7px); bottom: -8px; cursor: ns-resize; }
+.crop-box i[data-h="se"] { right: -8px; bottom: -8px; cursor: nwse-resize; }
+.crop-controls { display: flex; flex-direction: column; gap: 10px; }
+.crop-size { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.crop-size label { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.crop-size .btn { margin-left: auto; }
+.crop-dialog .dialog-actions.spread { justify-content: space-between; }
+.crop-hint .btn { height: 28px; padding: 0 12px; }
