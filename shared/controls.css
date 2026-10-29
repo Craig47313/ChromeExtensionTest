@@ -1,0 +1,47 @@
+/* Shared by lib/stepper.js and lib/menu.js. Uses the host page's tokens
+   (--surface, --border, --text, --muted, --accent, --danger, --shadow). */
+.tc-step {
+  display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 3px 0 8px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text);
+}
+.tc-step:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tc-step-val {
+  width: 3ch; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent;
+  font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; box-shadow: none !important;
+}
+.tc-step-unit { font-size: 12px; color: var(--muted); }
+.tc-step-btns { display: grid; grid-template-rows: 1fr 1fr; width: 18px; height: 26px; margin-left: 2px; }
+.tc-step-btn {
+  display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: transparent;
+  color: var(--muted); font-size: 7px; line-height: 1; cursor: pointer;
+}
+.tc-step-btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.tc-step-btn:disabled { opacity: 0.3; cursor: default; }
+
+.tc-menu {
+  position: fixed; z-index: 60; min-width: 160px; max-width: min(320px, calc(100vw - 16px)); padding: 5px;
+  border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow); outline: 0;
+}
+dialog .tc-menu { position: absolute; }
+.tc-list { display: flex; flex-direction: column; max-height: min(420px, calc(100vh - 16px)); overflow-y: auto; }
+.tc-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 5px 10px; border: 0;
+  border-radius: 7px; background: transparent; text-align: left; font-weight: 550; cursor: pointer; color: inherit;
+}
+.tc-item:hover:not(:disabled), .tc-item:focus-visible { background: var(--accent-soft); outline: 0; }
+.tc-item:disabled { opacity: 0.4; cursor: default; }
+.tc-item.danger { color: var(--danger); }
+.tc-item .tc-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-hint { font-size: 12px; color: var(--muted); }
+.tc-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.tc-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+.tc-tick { width: 10px; flex: none; font-style: normal; font-size: 12px; color: var(--accent); }
+
+.tc-drop {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; max-width: 100%; padding: 0 8px 0 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-weight: 600; cursor: pointer;
+}
+.tc-drop:hover { border-color: var(--accent); }
+.tc-drop .tc-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-caret { font-size: 10px; color: var(--muted); }

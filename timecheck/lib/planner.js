@@ -7,54 +7,13 @@
 
   // ---------- dates ----------
 
-  const DAY = 86400000;
+  // Date helpers live in shared/dates.js (copied into lib/ by scripts/sync-shared.sh).
+  const { DAY, pad, dateKey, fromKey, addDays, daysBetween, weekStart, relDay, fmtTime, fmtMinutes, ago } = g.InkDates || require('./dates.js');
   const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-  const pad = (n) => String(n).padStart(2, '0');
-  const dateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const fromKey = (k) => {
-    const [y, m, d] = k.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  };
-  const addDays = (k, n) => {
-    const d = fromKey(k);
-    d.setDate(d.getDate() + n);
-    return dateKey(d);
-  };
-  const daysBetween = (a, b) => Math.round((fromKey(b) - fromKey(a)) / DAY);
-  const weekStart = (k) => {
-    const d = fromKey(k);
-    const offset = (d.getDay() + 6) % 7; // Monday-based weeks, like the school grid
-    return addDays(k, -offset);
-  };
-
-  function relDay(k, today = dateKey()) {
-    if (!k) return '';
-    const n = daysBetween(today, k);
-    if (n === 0) return 'Today';
-    if (n === 1) return 'Tomorrow';
-    if (n === -1) return 'Yesterday';
-    const d = fromKey(k);
-    if (n > 1 && n < 7) return d.toLocaleDateString([], { weekday: 'long' });
-    if (n < 0) return `${-n} days ago`;
-    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-  }
 
   function minutesOfDay(hhmm) {
     const [h, m] = String(hhmm || '0:0').split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
-  }
-
-  function fmtTime(ts) {
-    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-
-  function fmtMinutes(min) {
-    min = Math.max(0, Math.round(min));
-    if (min < 60) return `${min}m`;
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return m ? `${h}h ${m}m` : `${h}h`;
   }
 
   // ---------- courses ----------
@@ -453,16 +412,6 @@
       onPct: weight ? Math.round(withOnitry.reduce((sum, s) => sum + s.onitry.onPct * Math.max(1, s.minutes), 0) / weight) : null,
       recent: mine.slice(-8).reverse(),
     };
-  }
-
-  // "today", "yesterday", "2 days ago", "3 weeks ago".
-  function ago(ts, now = Date.now()) {
-    const d = daysBetween(dateKey(new Date(ts)), dateKey(new Date(now)));
-    if (d <= 0) return 'today';
-    if (d === 1) return 'yesterday';
-    if (d < 14) return `${d} days ago`;
-    if (d < 60) return `${Math.floor(d / 7)} weeks ago`;
-    return `${Math.floor(d / 30)} months ago`;
   }
 
   // Suggestions under the add row: names with a word starting like the query first, then the rest that contain it;
