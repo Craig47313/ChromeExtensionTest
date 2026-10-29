@@ -9,6 +9,7 @@
   const P = InkPlan;
   const K = P.K;
   const GUARD_RULE_BASE = 1001; // one redirect rule per gated site: ids 1001, 1002, …
+  const ALLOW_RULE_BASE = 1501; // one allow rule per page you allowed for the running block
   const TICK = 'plan-tick';
   const FOCUS_END = 'plan-focus-end';
   const PASS_EXPIRE = 'plan-pass-expire';
@@ -130,6 +131,7 @@
       title: String(title || (isBreak ? 'Break' : 'Focus')).slice(0, 200),
       course,
       activityId: !isBreak && task ? task.activityId || null : null,
+      allow: isBreak ? [] : await allowFor(task),
       kind: isBreak ? 'break' : 'focus',
       startedAt: now,
       endsAt: now + minutes * 60000,
@@ -156,6 +158,14 @@
     // happens after the block has started and updates the stored focus when done.
     if (focus.onitryPending) connectOnitry(focus.id, settings);
     return { ok: true, focus };
+  }
+
+  // Pages allowed for a block: what's kept on its activity.
+  async function allowFor(task) {
+    if (!task || !task.activityId) return [];
+    const acts = await P.store.get(K.activities, []);
+    const a = acts.find((x) => x.id === task.activityId);
+    return a && a.allow ? a.allow.slice() : [];
   }
 
   async function connectOnitry(focusId, settings) {
@@ -446,7 +456,9 @@
     const passes = await activePasses();
     const gs = P.guardState(settings, focus, tasks, new Date(), meta.escalatedUntil || 0, meta.offUntil || 0);
     const sites = gs.active ? settings.sites.filter((s) => !passes[s]) : [];
-    const key = JSON.stringify(sites);
+    // Pages allowed for the running block get through even when their site is gated.
+    const allow = gs.active && focus && !focus.pausedAt ? focus.allow || [] : [];
+    const key = JSON.stringify([sites, allow.map((e) => e.value)]);
 
     const nextExpiry = Math.min(...Object.values(passes), Infinity);
     if (Number.isFinite(nextExpiry)) chrome.alarms.create(PASS_EXPIRE, { when: nextExpiry + 500 });
@@ -463,12 +475,20 @@
       action: { type: 'redirect', redirect: { regexSubstitution: `${chrome.runtime.getURL('guard.html')}#\\0` } },
       condition: { regexFilter: `^https?://([^/]*\\.)?${escapeRe(site)}([:/?#].*)?$`, resourceTypes: ['main_frame'] },
     }));
+    const allowRules = sites.length
+      ? allow.map((e, i) => ({
+          id: ALLOW_RULE_BASE + i,
+          priority: 2, // beats the redirect
+          action: { type: 'allow' },
+          condition: { regexFilter: P.allowRegex(e), resourceTypes: ['main_frame'] },
+        }))
+      : [];
     const existing = await chrome.declarativeNetRequest.getDynamicRules();
     try {
       await chrome.declarativeNetRequest.updateDynamicRules({
         // Also remove the ids we're about to add, so this can never collide.
-        removeRuleIds: [...new Set([...existing.filter((r) => r.id >= GUARD_RULE_BASE && r.id < GUARD_RULE_BASE + 1000).map((r) => r.id), ...addRules.map((r) => r.id)])],
-        addRules,
+        removeRuleIds: [...new Set([...existing.filter((r) => r.id >= GUARD_RULE_BASE && r.id < GUARD_RULE_BASE + 1000).map((r) => r.id), ...addRules.map((r) => r.id), ...allowRules.map((r) => r.id)])],
+        addRules: addRules.concat(allowRules),
       });
       const meta = await P.store.get(K.meta, {});
       if (meta.guardError) await P.store.set(K.meta, { ...meta, guardError: null });
@@ -492,7 +512,7 @@
     }
   }
 
-  async function grantPass({ site, minutes, reason, url }) {
+  async function grantPass({ site, minutes, reason, url, allowPage = false }) {
     const settings = await P.getSettings();
     if (!settings.sites.includes(site)) return { ok: false, error: 'not a gated site' };
     const focus = await P.store.get(K.focus, null);
@@ -502,6 +522,12 @@
     const mins = Math.max(1, Math.min(max, Number(minutes) || settings.passMinutes));
     const until = Date.now() + mins * 60000;
     await P.store.update(K.passes, {}, (p) => ({ ...p, [site]: until }));
+    // "Keep this page allowed for the block": same reason, wait and typed sentence as the pass itself.
+    const entry = allowPage && P.isFocusing(focus) ? P.parseAllow(url) : null;
+    if (entry) {
+      await P.store.update(K.focus, null, (f) => (f ? { ...f, allow: P.mergeAllow(f.allow, [entry]) } : f));
+      await P.log(`Allowed ${entry.value} for ${focus.title}`, 'system', Date.now(), focus.activityId);
+    }
     await P.log(`${site} for ${mins}m — “${String(reason || '').slice(0, 200)}”${P.isFocusing(focus) ? ` (during focus on ${focus.title})` : ''}`, 'pass');
     await syncGuard(true);
     return { ok: true, until, url };

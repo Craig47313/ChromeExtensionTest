@@ -391,3 +391,27 @@ test('first run builds activities from tasks and sessions; adding links tasks; r
   assert.deepEqual([entry.kind, entry.text, entry.act], ['reflect', 'Went well', econ.id]);
   delete globalThis.chrome;
 });
+
+// ---------- allowed pages ----------
+
+test('allowed pages: YouTube links collapse to one video, sites and folders match tightly', () => {
+  const vid = { kind: 'url', value: 'youtube.com/watch?v=dQw4w9WgXcQ', label: 'YouTube video' };
+  for (const u of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5s', 'youtu.be/dQw4w9WgXcQ', 'https://m.youtube.com/shorts/dQw4w9WgXcQ', 'youtube.com/embed/dQw4w9WgXcQ']) assert.deepEqual(P.parseAllow(u), vid, u);
+  assert.deepEqual(P.parseAllow('https://youtube.com/playlist?list=PLabc123xyz'), { kind: 'url', value: 'youtube.com/playlist?list=PLabc123xyz', label: 'YouTube playlist' });
+  assert.deepEqual(P.parseAllow('Desmos.com'), { kind: 'site', value: 'desmos.com', label: 'desmos.com' });
+  assert.deepEqual(P.parseAllow('https://www.khanacademy.org/math/algebra/'), { kind: 'url', value: 'khanacademy.org/math/algebra', label: 'khanacademy.org' });
+  for (const bad of ['', 'not a url', 'localhost', 'ftp://x.com', 'javascript:alert(1)']) assert.equal(P.parseAllow(bad), null, bad);
+
+  const allow = ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'desmos.com', 'khanacademy.org/math/algebra'].map(P.parseAllow);
+  const ok = (u) => !!P.allowedBy(allow, u);
+  assert.ok(ok('https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
+  assert.ok(ok('https://youtube.com/watch?feature=share&v=dQw4w9WgXcQ&t=3'));
+  assert.ok(!ok('https://www.youtube.com/watch?v=someOtherOne'));
+  assert.ok(!ok('https://www.youtube.com/watch?v=dQw4w9WgXcQextra'));
+  assert.ok(!ok('https://www.youtube.com/'));
+  assert.ok(ok('https://www.desmos.com/calculator') && ok('https://teacher.desmos.com/'));
+  assert.ok(!ok('https://evil-desmos.com/') && !ok('https://desmos.com.evil.net/'));
+  assert.ok(ok('https://khanacademy.org/math/algebra/x') && ok('https://www.khanacademy.org/math/algebra'));
+  assert.ok(!ok('https://khanacademy.org/math/algebra2') && !ok('https://khanacademy.org/math'));
+  assert.deepEqual(P.mergeAllow([allow[0]], [allow[0], allow[1]]).map((e) => e.value), [allow[0].value, allow[1].value]);
+});

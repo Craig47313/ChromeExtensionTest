@@ -35,3 +35,6 @@ body.guard-body { overflow-y: auto; min-height: 100vh; display: grid; place-item
 }
 .g-pass-body input:focus { border-color: var(--accent); }
 .g-off { border-top: 0; padding-top: 0; }
+.g-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.g-allowed { margin-top: 10px; font-size: 13px; }
+.g-allowed a { color: var(--accent); }

@@ -437,6 +437,66 @@
     return out.slice(0, limit);
   }
 
+  // ---------- allowed pages ----------
+  // While a block runs, pages you've allowed for it get through the gate: a whole site
+  // ("desmos.com"), a page or folder ("khanacademy.org/math/algebra"), or one YouTube
+  // video or playlist. They live on the activity (so they come back next time) and are
+  // copied onto the running block. Each entry is { kind: 'site' | 'url', value, label }.
+
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const YT_HOSTS = new Set(['youtube.com', 'm.youtube.com', 'www.youtube.com', 'youtu.be']);
+  const YT_ID = /^[\w-]{6,20}$/;
+
+  // Turn whatever was pasted into an entry, or null if it isn't a usable address.
+  function parseAllow(input) {
+    let text = String(input || '').trim();
+    if (!text || /\s/.test(text)) return null;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = `https://${text}`;
+    let u;
+    try {
+      u = new URL(text);
+    } catch (_) {
+      return null;
+    }
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return null;
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    if (YT_HOSTS.has(u.hostname.toLowerCase()) || host === 'youtube.com') {
+      let id = null;
+      if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+      else if (u.pathname === '/watch') id = u.searchParams.get('v');
+      else {
+        const m = /^\/(shorts|embed|live|v)\/([^/?#]+)/.exec(u.pathname);
+        if (m) id = m[2];
+      }
+      if (id && YT_ID.test(id)) return { kind: 'url', value: `youtube.com/watch?v=${id}`, label: 'YouTube video' };
+      const list = u.pathname === '/playlist' ? u.searchParams.get('list') : null;
+      if (list && YT_ID.test(list)) return { kind: 'url', value: `youtube.com/playlist?list=${list}`, label: 'YouTube playlist' };
+    }
+    const path = u.pathname.replace(/\/+$/, '');
+    if (!path) return { kind: 'site', value: host, label: host };
+    return { kind: 'url', value: `${host}${path}`, label: host };
+  }
+
+  // The regular expression (RE2-safe, for declarativeNetRequest) that matches a page the entry allows.
+  function allowRegex(e) {
+    if (e.kind === 'site') return `^https?://([^/]*\\.)?${esc(e.value)}([:/?#].*)?$`;
+    const yt = /^youtube\.com\/(watch\?v=|playlist\?list=)([\w-]+)$/.exec(e.value);
+    if (yt) return `^https?://((www|m)\\.)?youtube\\.com/${yt[1] === 'watch?v=' ? 'watch' : 'playlist'}\\?(.*&)?${yt[1] === 'watch?v=' ? 'v' : 'list'}=${yt[2]}([&#].*)?$`;
+    const slash = e.value.indexOf('/');
+    return `^https?://(www\\.)?${esc(e.value.slice(0, slash))}${esc(e.value.slice(slash))}([/?#].*)?$`;
+  }
+
+  // The entry that lets `url` through, if any.
+  function allowedBy(allow, url) {
+    return (allow || []).find((e) => new RegExp(allowRegex(e)).test(url)) || null;
+  }
+
+  // Merge entries, keeping the first of each value.
+  function mergeAllow(a, b) {
+    const seen = new Set();
+    return (a || []).concat(b || []).filter((e) => !seen.has(e.value) && seen.add(e.value));
+  }
+
   // ---------- breaks and the off switch ----------
 
   // Minutes of break taken on `today`: finished breaks plus the one running now.
@@ -803,6 +863,13 @@
     });
   }
 
+  // Allowed pages kept on an activity.
+  function setActivityAllow(activityId, fn) {
+    return locked('pl-activities', () =>
+      store.update(K.activities, [], (list) => list.map((a) => (a.id === activityId ? { ...a, allow: fn(a.allow || []) } : a)))
+    );
+  }
+
   // A reflection on an activity, also written to the Log.
   function addReflection(activityId, { text, minutes = null, onPct = null, sessionId = null, at = Date.now() }) {
     return locked('pl-activities', async () => {
@@ -865,6 +932,7 @@
     inWorkHours, inFreeBlock, guardState, isFocusing,
     breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
     actKey, activityStats, ago, suggest, syncActivities, addReflection,
+    parseAllow, allowRegex, allowedBy, mergeAllow, setActivityAllow,
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,
     blockLetter, isSchoolDay, dayInfo, expandRange, dateRanges, isFreeBlock, blockAt, nextLetterDate, parseSchedule, formatSchedule,
     weekStats,

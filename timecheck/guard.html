@@ -18,6 +18,10 @@
       <div class="g-label">You’re in a focus block</div>
       <div class="g-focus-title" id="focusTitle"></div>
       <div class="g-focus-left" id="focusLeft"></div>
+      <div class="g-allowed" id="allowedBox" hidden>
+        <div class="g-label">Allowed for this block</div>
+        <ul class="g-list" id="allowedList"></ul>
+      </div>
     </section>
 
     <section class="g-box" id="dueBox" hidden>
@@ -46,6 +50,7 @@
           <textarea id="sentence" rows="2" spellcheck="false" autocomplete="off"></textarea>
         </div>
         <div class="g-mins" id="mins"></div>
+        <label class="g-check" id="allowWrap" hidden><input type="checkbox" id="allowPage"> <span>Keep this page allowed for the rest of this block</span></label>
         <button class="btn danger" id="passBtn" disabled>Let me in</button>
         <div class="g-count" id="count"></div>
       </div>

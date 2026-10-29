@@ -38,6 +38,18 @@
     };
     tick();
     setInterval(tick, 15000);
+    const allowed = focus.allow || [];
+    if (allowed.length) {
+      $('#allowedBox').hidden = false;
+      for (const e of allowed) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = e.kind === 'site' ? `https://${e.value}` : /^youtube\.com\/(watch|playlist)/.test(e.value) ? `https://www.${e.value}` : `https://${e.value}`;
+        a.textContent = e.kind === 'site' ? e.value : e.label === e.value.split('/')[0] ? e.value : `${e.label}: ${e.value}`;
+        li.appendChild(a);
+        $('#allowedList').appendChild(li);
+      }
+    }
   } else {
     const urgent = P.urgentTasks(tasks, today);
     const free = P.inFreeBlock(settings);
@@ -102,6 +114,7 @@
   $('#passBox').hidden = escalated;
   $('#count').textContent = siteVisits ? `You’ve already let yourself into ${site} ${siteVisits} time${siteVisits === 1 ? '' : 's'} today.` : '';
   if (strict) {
+    $('#allowWrap').hidden = !P.parseAllow(target);
     $('#sentenceWrap').hidden = false;
     $('#sentenceText').textContent = sentence;
     $('#sentence').addEventListener('paste', (e) => e.preventDefault());
@@ -146,7 +159,7 @@
 
   btn.addEventListener('click', async () => {
     if (btn.disabled) return;
-    const res = await chrome.runtime.sendMessage({ type: 'plan:pass', site, minutes, reason: $('#reason').value.trim(), url: target });
+    const res = await chrome.runtime.sendMessage({ type: 'plan:pass', site, minutes, reason: $('#reason').value.trim(), url: target, allowPage: strict && $('#allowPage').checked });
     if (res && res.ok) location.replace(target || `https://${site}`);
     else $('#count').textContent = `Couldn’t open: ${(res && res.error) || 'unknown error'}`;
   });

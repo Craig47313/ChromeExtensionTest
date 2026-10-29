@@ -303,6 +303,16 @@
       bar.append(info, timer, actions, progress);
       const line = onitryLine(f);
       if (line) bar.append(line);
+      if (f.kind !== 'break') {
+        const n = allowList(f.activityId).length;
+        const hint = el('div', 'nb-hint nb-off');
+        hint.append(el('span', null, n ? `🔗 ${n} page${n === 1 ? '' : 's'} allowed through the gate.` : 'Need a video or site for this?'));
+        const b = el('button', null, n ? 'Manage' : 'Allow a page');
+        b.type = 'button';
+        b.addEventListener('click', () => allowPanel(b, f.activityId));
+        hint.append(b);
+        bar.append(hint);
+      }
       const offH = offHint();
       if (offH) bar.append(offH);
       const then = P.nextUp(events, nowMin);
@@ -613,6 +623,7 @@
         { label: 'Move to top', disabled: i <= 0, onSelect: () => moveRow(t.id, 0) },
         { label: 'Move to bottom', disabled: i < 0 || i === ids.length - 1, onSelect: () => moveRow(t.id, ids.length) },
         { label: 'Start at a set time…', onSelect: () => openSetTime(anchor, t, ev) },
+        ...(t.kind === 'break' ? [] : [{ label: 'Allowed pages…', onSelect: () => allowPanel(anchor.focus ? anchor : $('#queue'), (actOfTask(t) || {}).id || null) }]),
         { sep: true },
         { label: 'Duplicate', onSelect: () => duplicateTask(t) },
         { label: 'Remove', danger: true, onSelect: () => removeWithUndo(t) },
@@ -1789,6 +1800,118 @@
   // Enter in a code box shouldn't save and close the whole settings dialog.
   for (const id of ['#offOld', '#offNew', '#offUse']) $(id).addEventListener('keydown', (e) => e.key === 'Enter' && e.preventDefault());
 
+  // ---------- allowed pages (let a video or site through the gate while a block runs) ----------
+
+  const liveFocusFor = (activityId) => (state.focus && state.focus.kind !== 'break' && (!activityId || state.focus.activityId === activityId) ? state.focus : null);
+
+  // What is allowed for an activity: its kept list, plus anything added to the block that's running.
+  function allowList(activityId) {
+    const a = actById(activityId);
+    const live = liveFocusFor(activityId);
+    return P.mergeAllow(a ? a.allow : [], live ? live.allow : []);
+  }
+
+  async function addAllow(input, { activityId, remember }) {
+    const entry = P.parseAllow(input);
+    if (!entry) return 'That doesn’t look like a web address. Paste a YouTube link or a site like desmos.com.';
+    const live = liveFocusFor(activityId);
+    if (live) await P.store.update(K.focus, null, (f) => (f ? { ...f, allow: P.mergeAllow(f.allow, [entry]) } : f));
+    if (activityId && (remember || !live)) await P.setActivityAllow(activityId, (list) => P.mergeAllow(list, [entry]));
+    if (live) await P.log(`Allowed ${entry.value} for ${live.title}`, 'system', Date.now(), live.activityId);
+    return null;
+  }
+
+  async function removeAllow(value, activityId) {
+    const live = liveFocusFor(activityId);
+    if (live) await P.store.update(K.focus, null, (f) => (f ? { ...f, allow: (f.allow || []).filter((e) => e.value !== value) } : f));
+    if (activityId) await P.setActivityAllow(activityId, (list) => list.filter((e) => e.value !== value));
+  }
+
+  // The editor: a box to paste an address, and the list of what is allowed. `after` runs once something changed.
+  function allowEditor(box, { activityId, after = () => {} }) {
+    box.textContent = '';
+    const live = liveFocusFor(activityId);
+    const row = el('div', 'tc-row');
+    const input = el('input', 'tc-url');
+    input.type = 'text';
+    input.placeholder = 'Paste a YouTube link or a site';
+    input.spellcheck = false;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', 'Address to allow');
+    const addBtn = el('button', 'btn', 'Allow');
+    addBtn.type = 'button';
+    row.append(input, addBtn);
+    const err = el('div', 'tc-error');
+    err.setAttribute('role', 'alert');
+    let remember = null;
+    if (live && activityId) {
+      const lab = el('label', 'tc-check');
+      remember = el('input');
+      remember.type = 'checkbox';
+      remember.checked = true;
+      lab.append(remember, el('span', null, 'Keep it for this activity next time'));
+      box.append(row, lab, err);
+    } else box.append(row, err);
+    const go = async () => {
+      const msg = await addAllow(input.value, { activityId, remember: remember ? remember.checked : true });
+      if (msg) {
+        err.textContent = msg;
+        return;
+      }
+      input.value = '';
+      await load();
+      after();
+    };
+    addBtn.addEventListener('click', go);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        go();
+      }
+    });
+    const list = el('ul', 'tc-allow');
+    for (const e of allowList(activityId)) {
+      const li = el('li');
+      const name = el('span', 'tc-allow-name');
+      name.append(el('b', null, e.kind === 'site' ? e.value : e.label), el('span', 'tc-allow-val', e.kind === 'site' ? 'whole site' : e.value));
+      const x = el('button', 'icon-btn small', '✕');
+      x.type = 'button';
+      x.title = 'Remove';
+      x.setAttribute('aria-label', `Remove ${e.value}`);
+      x.addEventListener('click', async () => {
+        await removeAllow(e.value, activityId);
+        await load();
+        after();
+      });
+      li.append(name, x);
+      list.append(li);
+    }
+    if (!list.children.length) list.append(el('li', 'empty', 'Nothing allowed yet.'));
+    box.append(list);
+    const wide = allowList(activityId).filter((e) => e.kind === 'site' && state.settings.sites.some((g) => e.value === g || e.value.endsWith(`.${g}`)));
+    if (wide.length) box.append(el('div', 'tc-note warn', `${wide.map((e) => e.value).join(', ')} is a gated site: allowing all of it opens every page on it. A single video link is safer.`));
+    return input;
+  }
+
+  function allowPanel(anchor, activityId) {
+    const a = actById(activityId);
+    TCMenu.panel({
+      anchor,
+      align: 'end',
+      label: 'Allowed pages',
+      build(box) {
+        box.classList.add('tc-form');
+        box.append(el('div', 'tc-title', a ? `Allowed pages · ${a.name}` : 'Allowed pages'));
+        box.append(el('div', 'tc-note', 'These get through the gate while this block runs. Everything else stays gated.'));
+        const holder = el('div', 'tc-allow-box');
+        box.append(holder);
+        const draw = () => allowEditor(holder, { activityId, after: draw });
+        const input = draw();
+        queueMicrotask(() => input.focus());
+      },
+    });
+  }
+
   // ---------- activity page ----------
 
   let openActId = null;
@@ -1836,6 +1959,7 @@
     }
     if (!notes.length) nl.append(el('li', 'empty', 'Nothing written yet. A line after each block builds up here.'));
 
+    allowEditor($('#actAllow'), { activityId: a.id, after: renderActivity });
     const sl = $('#actSessions');
     sl.textContent = '';
     for (const x of st.recent) {
