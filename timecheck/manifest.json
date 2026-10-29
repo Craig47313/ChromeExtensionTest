@@ -62,6 +62,9 @@
       "description": "Open Timecheck"
     }
   },
+  "externally_connectable": {
+    "ids": ["*"]
+  },
   "web_accessible_resources": [
     {
       "resources": [

@@ -24,6 +24,7 @@
     reviews: {},
     activities: [],
     reflection: null,
+    inkwellPending: null,
     weekOffset: 0,
     tab: 'today',
     editId: null,
@@ -127,6 +128,7 @@
     state.reviews = d[K.reviews] || {};
     state.activities = d[K.activities] || [];
     state.reflection = (d[K.meta] || {}).pendingReflection || null;
+    state.inkwellPending = (d[K.meta] || {}).inkwellPending || null;
     if (!state.onitry) state.onitry = d[K.onitry] || null;
   }
 
@@ -154,6 +156,7 @@
     renderAddRow();
     renderNow();
     renderReflect();
+    renderInkwell();
     if (openActId) renderActivity();
     renderWeek();
     renderSomeday();
@@ -1912,6 +1915,85 @@
     });
   }
 
+  // ---------- Inkwell link ----------
+
+  const inkwellId = () => state.settings.inkwell.id;
+
+  const clearPending = () => P.store.update(K.meta, {}, (m) => ({ ...m, inkwellPending: null }));
+  async function connectInkwell() {
+    const p = state.inkwellPending;
+    if (!p) return;
+    await P.setSettings({ inkwell: { id: p.id } });
+    await clearPending();
+    toast('Connected to Inkwell');
+  }
+  async function ignoreInkwell() {
+    const p = state.inkwellPending;
+    if (!p) return;
+    await P.store.update(K.meta, {}, (m) => ({ ...m, inkwellPending: null, inkwellIgnored: [...(m.inkwellIgnored || []), p.id] }));
+  }
+  async function disconnectInkwell() {
+    await P.setSettings({ inkwell: { id: null } });
+    await P.store.update(K.meta, {}, (m) => ({ ...m, inkwellIgnored: [] }));
+  }
+
+  function renderInkwell() {
+    const asking = !!state.inkwellPending && state.inkwellPending.id !== inkwellId();
+    const bar = $('#connectBar');
+    if (!asking) {
+      bar.hidden = true;
+      bar.textContent = '';
+    } else if (bar.hidden) {
+      bar.hidden = false;
+      bar.textContent = '';
+      bar.append(el('span', null, 'Inkwell, your notes extension, wants to connect to Timecheck. Connect to Inkwell?'));
+      const yes = el('button', 'btn primary', 'Connect');
+      yes.type = 'button';
+      yes.addEventListener('click', connectInkwell);
+      const no = el('button', 'btn ghost', 'Not now');
+      no.type = 'button';
+      no.addEventListener('click', ignoreInkwell);
+      bar.append(yes, no);
+    }
+    // ⚙ → Inkwell
+    const help = $('#inkHelp');
+    const btns = $('#inkBtns');
+    btns.textContent = '';
+    if (inkwellId()) {
+      help.textContent = 'Connected to Inkwell. Activity pages get Open in Inkwell, reflections are added to the activity’s note, and Inkwell can add blocks to your queue. Only that extension is answered.';
+      const b = el('button', 'btn', 'Disconnect');
+      b.type = 'button';
+      b.addEventListener('click', disconnectInkwell);
+      btns.append(b);
+    } else if (asking) {
+      help.textContent = 'Inkwell wants to connect. Connect to Inkwell? Only the extension you approve can talk to Timecheck.';
+      const yes = el('button', 'btn primary', 'Connect');
+      yes.type = 'button';
+      yes.addEventListener('click', connectInkwell);
+      const no = el('button', 'btn', 'Not now');
+      no.type = 'button';
+      no.addEventListener('click', ignoreInkwell);
+      btns.append(yes, no);
+    } else help.textContent = 'Not connected. If Inkwell is installed, open it (or reload it) and it will ask to connect.';
+    $('#actInk').hidden = !inkwellId();
+  }
+
+  // A reflection also goes to the bottom of the activity's Inkwell note.
+  async function sendToInkwell(activityId, { text, minutes, onPct, at = Date.now() }) {
+    const a = actById(activityId);
+    if (!a || !inkwellId()) return;
+    const day = P.fromKey(P.dateKey(new Date(at))).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const heading = [day, minutes ? `${minutes} min` : null, onPct != null ? `${onPct}% on task` : null].filter(Boolean).join(' · ');
+    await InkwellLink.append(inkwellId(), a, { heading, text });
+  }
+
+  $('#actInkBtn').addEventListener('click', async () => {
+    const a = actById(openActId);
+    if (!a) return;
+    const res = await InkwellLink.open(inkwellId(), a);
+    if (!res || !res.ok) toast('Inkwell isn’t answering. Is it installed and enabled?');
+  });
+
   // ---------- activity page ----------
 
   let openActId = null;
@@ -1979,6 +2061,7 @@
     const text = e.target.value.trim();
     if (!text || !openActId) return;
     await P.addReflection(openActId, { text });
+    sendToInkwell(openActId, { text });
     e.target.value = '';
     await load();
     renderActivity();
@@ -2017,6 +2100,7 @@
       const text = input.value.trim();
       if (!text) return input.focus();
       await P.addReflection(r.activityId, { text, minutes: r.minutes, onPct: r.onPct, sessionId: r.sessionId });
+      sendToInkwell(r.activityId, { text, minutes: r.minutes, onPct: r.onPct });
       await clear();
     };
     save.addEventListener('click', doSave);

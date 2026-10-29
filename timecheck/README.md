@@ -4,7 +4,7 @@ A Chrome extension for school days. It's a planner that pushes back: a queue of 
 
 **The full guide is built in:** press **?** in the planner's header (it also opens on first install). It has a self-checking tutorial, a feature overview, a deep dive into how everything works, and reference tables. The source is `docs.html`.
 
-It's a separate extension from Inkwell (the notes app in the parent folder). They don't share anything, so you can install either or both.
+It's a separate extension from Inkwell (the notes app in the parent folder). You can install either or both. They share code through the repository's `shared/` folder, and when both are installed they can talk to each other once you approve it.
 
 ## What it does
 
@@ -49,6 +49,8 @@ It's a separate extension from Inkwell (the notes app in the parent folder). The
 **Look back**
 - **Log:** timestamped log, daily stats, check-in streak and the last 7 days. Notes have an **About** dropdown to tie them to an activity.
 - **Activities:** Timecheck learns the things you keep doing. Typing in the add row suggests them with their usual length, when you last did them and total time; picking one fills in subject and length. Click an activity's name for its page (time this week and overall, recent sessions, your reflections).
+- **Allowed pages:** during a block, allow one YouTube video or a site (Allow a page on the top card, a row's ⋮ menu, or the activity page) and it opens with no pass while everything else stays gated. Kept on the activity for next time.
+- **Inkwell link:** if you also have Inkwell, Timecheck asks "Connect to Inkwell?" (top of the planner and ⚙). Then activity pages get Open in Inkwell, reflections land at the bottom of the activity's note, linked notes show a Timecheck strip with ▶ Start a block, and any note's ⋮ menu has Add to Timecheck queue.
 - **Reflections:** when a focus block ends, one line asks how it went (after every block, only after Done, or never; skip any time). It's saved on the activity and in the Log.
 - **Weekly review:**
   - Shows the week in numbers: tasks done and missed per subject, focus time, Onitry's on-task %, gate passes and why, and your moods.
@@ -132,8 +134,9 @@ docs.html/.css/.js the built-in guide (tutorial, overview, how it works, referen
 guard.html/.css/.js the distraction gate
 base.css           theme tokens, buttons, dialogs
 lib/planner.js     data model, queue timing, activities, block days, weekly stats (also runs in Node)
-lib/stepper.js     shared number stepper (▲ ▼, arrow keys, wheel)
-lib/menu.js        shared dropdowns, ⋮ and right-click menus (styles in lib/controls.css)
+lib/inkwell.js     the link to the Inkwell extension (messages, after you approve it in ⚙)
+lib/dates.js, icons.js, palettes.js, stepper.js, menu.js, controls.css
+                   copies of ../shared/ made by scripts/sync-shared.sh (edit shared/, not these)
 lib/onitry.js      client for Onitry's local bridge + native launcher
 lib/palettes.js, lib/icons.js
 tests/             node --test tests/planner.test.js

@@ -504,3 +504,10 @@ body.today-body { overflow-y: auto; background: var(--bg); }
 .tc-allow-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-allow-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
 .act-allow { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- Inkwell link ---------- */
+
+.connect-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); font-size: 13.5px; }
+.connect-bar span { flex: 1 1 200px; }
+.connect-bar .btn { height: 32px; padding: 0 12px; }
+.act-ink { margin: 0 0 10px; }

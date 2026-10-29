@@ -837,6 +837,50 @@
     }
   });
 
+  // ---------- Inkwell (the notes extension) ----------
+  // Inkwell says hello first, because only Timecheck's ID is fixed. You approve it in ⚙; after that
+  // only that ID is answered. Anything from any other extension is ignored.
+
+  async function handleInkwell(msg, sender) {
+    const settings = await P.getSettings();
+    const connected = !!settings.inkwell.id && settings.inkwell.id === sender.id;
+    if (msg.type === 'inkwell:hello') {
+      if (connected) return { ok: true, connected: true };
+      const meta = await P.store.get(K.meta, {});
+      if (!(meta.inkwellIgnored || []).includes(sender.id)) await P.store.set(K.meta, { ...meta, inkwellPending: { id: sender.id, at: Date.now() } });
+      return { ok: true, connected: false };
+    }
+    if (!connected) return { ok: false, error: 'not connected' };
+    if (msg.type === 'inkwell:ping') return { ok: true, connected: true };
+
+    const acts = await P.store.get(K.activities, []);
+    if (msg.type === 'inkwell:stats') {
+      const a = acts.find((x) => x.id === msg.activityId);
+      if (!a) return { ok: false, error: 'no such activity' };
+      const st = P.activityStats(a, await P.store.get(K.sessions, []));
+      return { ok: true, name: a.name, blocks: st.blocks, total: st.total, week: st.week, usual: st.usual, last: st.last, lastAgo: st.last ? P.ago(st.last) : null };
+    }
+    if (msg.type === 'inkwell:add-block') {
+      const byId = msg.activityId ? acts.find((x) => x.id === msg.activityId) : null;
+      const title = String(byId ? byId.name : msg.title || '').trim().slice(0, 200);
+      if (!title) return { ok: false, error: 'no title' };
+      const known = byId || acts.find((x) => x.key === P.actKey(title)) || null;
+      const minutes = (known && P.activityStats(known, await P.store.get(K.sessions, [])).usual) || settings.focusMinutes;
+      const task = P.makeTask({ title, course: known ? known.course : null, plan: P.dateKey(), estimate: minutes, order: Date.now() });
+      await P.addTasks([task]);
+      const after = (await P.store.get(K.activities, [])).find((x) => x.key === P.actKey(title)) || null;
+      if (msg.start) await focusStart({ taskId: task.id, title, course: task.course, minutes });
+      return { ok: true, activityId: after ? after.id : null, name: title, taskId: task.id };
+    }
+    return { ok: false, error: 'unknown message' };
+  }
+
+  chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+    if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('inkwell:') || !sender.id) return false;
+    handleInkwell(msg, sender).then(sendResponse, (err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  });
+
   // ---------- messages from pages ----------
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

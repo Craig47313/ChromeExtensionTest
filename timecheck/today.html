@@ -25,6 +25,7 @@
     </header>
 
 
+    <section class="connect-bar" id="connectBar" hidden></section>
     <section class="now-bar" id="nowBar" aria-live="polite"></section>
     <section class="reflect-bar" id="reflectBar" hidden></section>
 
@@ -145,6 +146,7 @@
       <button class="icon-btn" id="actClose" title="Close" aria-label="Close">✕</button>
     </div>
     <div class="act-stats" id="actStats"></div>
+    <div class="act-ink" id="actInk" hidden><button class="btn" id="actInkBtn" type="button">Open in Inkwell</button></div>
     <div class="set-sec">Reflections</div>
     <textarea class="log-input" id="actNote" rows="2" placeholder="How did it go? Enter to save it on this activity."></textarea>
     <ol class="act-list" id="actNotes"></ol>
@@ -278,6 +280,10 @@
         <label>&nbsp;<button type="button" class="btn" id="onitryLaunchBtn">Launch Onitry</button></label>
       </div>
 
+      <div class="set-sec">Inkwell</div>
+      <p class="set-help" id="inkHelp"></p>
+      <div class="off-btns" id="inkBtns"></div>
+
       <div class="set-sec">Backup</div>
       <p class="set-help">Everything (tasks, log, settings, reviews) in one file. The Onitry pairing code is left out. Restoring replaces what’s here.</p>
       <div class="backup-row">
@@ -342,6 +348,7 @@
   <script src="lib/dates.js"></script>
   <script src="lib/planner.js"></script>
   <script src="lib/onitry.js"></script>
+  <script src="lib/inkwell.js"></script>
   <script src="today.js"></script>
 </body>
 </html>

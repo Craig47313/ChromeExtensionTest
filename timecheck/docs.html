@@ -29,6 +29,7 @@
       <a href="#gate">The distraction gate</a>
       <a href="#nudges">Nudges</a>
       <a href="#activities">Activities &amp; reflections</a>
+      <a href="#inkwell-link">Inkwell</a>
       <a href="#journal">Log &amp; check-ins</a>
       <a href="#review">Weekly review</a>
       <a href="#onitry">Onitry</a>
@@ -251,6 +252,16 @@
             <tr><td>Length</td><td>5, 10 or 20 min (or your default, up to 60)</td><td>2 or 5 min</td></tr>
           </tbody>
         </table>
+        <h3>Allowed pages</h3>
+        <p>Some work needs a gated site: a tutorial on YouTube, Desmos, a lecture playlist. Instead of taking a pass, <b>allow just that page for the block</b>. While the block runs, the pages you allowed open with no reason, wait or sentence, and everything else on that site stays gated.</p>
+        <ul>
+          <li><b>Add one:</b> press <b>Allow a page</b> on the top card while the block runs, choose <b>⋮ → Allowed pages…</b> on a queue row before you start, or use the box on the activity page. Paste a YouTube link (watch, youtu.be, shorts or a playlist) or a site such as <code>desmos.com</code> or <code>khanacademy.org/math/algebra</code>.</li>
+          <li><b>What a link allows:</b> a YouTube video link allows <i>that one video</i> (the time stamp and other extras in the link don’t matter). A site allows every page on it, including subdomains. A site plus a folder allows that folder and what’s under it.</li>
+          <li><b>Kept for next time:</b> the list belongs to the activity, so “CAD the claw” has its tutorial ready the next time you start it. When you add one during a running block you can untick <i>Keep it for this activity</i> to allow it for this block only.</li>
+          <li><b>From the gate page:</b> in a focus block, the pass box has <i>Keep this page allowed for the rest of this block</i>. It needs the same reason, wait and typed sentence as a strict pass.</li>
+          <li><b>Only while a block runs.</b> When it ends, is paused, or you take a break, the normal rules apply. Allowing a gated site as a whole (like <code>youtube.com</code>) is flagged, because it opens all of it.</li>
+        </ul>
+        <p class="note">A page that loads other pages without reloading (YouTube’s “up next”) isn’t a new page load, so Chrome doesn’t re-check it. Allow single videos for the tightest rule, and reloading a video that isn’t on the list brings the gate back.</p>
         <p>When a pass expires, any tabs still on that site are sent back to the gate.</p>
         <p class="note">Adding your own site asks Chrome for access to it. If you decline, that site can’t be gated.</p>
       </section>
@@ -291,6 +302,26 @@
         <p>The queue’s <b>⋮ → Edit</b> (and the ✎ on Done today and Free time rows) edits the task itself.</p>
         <h3>Reflections</h3>
         <p>When a focus block ends, a strip under the top card asks <i>“How did CAD the claw go?”</i> with the block’s length and on-task %. Type a line and press <b>Enter</b> or <b>Save</b>, or <b>Skip</b>. It is kept on that activity and also appears in the Log. The next block keeps running meanwhile. <b>⚙ → Ask how a block went</b> chooses after every focus block (the default), only after Done, or never. Breaks, skipped and switched blocks never ask.</p>
+      </section>
+
+      <section id="inkwell-link" class="d-sec">
+        <p class="d-kicker">Using it</p>
+        <h2>Inkwell</h2>
+        <p>Inkwell is the notes extension. If you have both, each activity can have its own Inkwell page. They are separate extensions that talk through Chrome’s extension messaging, and nothing leaves your computer.</p>
+        <h3>Connecting</h3>
+        <ol>
+          <li>Install or reload both. Inkwell sends a hello to Timecheck. (Timecheck’s extension ID is fixed; Inkwell’s depends on its folder, so Inkwell introduces itself.)</li>
+          <li>Timecheck shows <b>“Inkwell wants to connect. Connect to Inkwell?”</b> at the top of the planner and in <b>⚙ → Inkwell</b>. Press <b>Connect</b>, or <b>Not now</b> to stop being asked.</li>
+          <li>From then on Timecheck answers only that extension. Messages from any other extension are ignored. <b>Disconnect</b> in ⚙ undoes it.</li>
+        </ol>
+        <h3>What it does</h3>
+        <ul>
+          <li><b>Open in Inkwell</b> on an activity page creates (or finds) a note named after the activity and opens it.</li>
+          <li><b>Reflections</b> are added to the bottom of that note as a dated entry, like <i>“Oct 22 · 40 min · 85% on task”</i> followed by your sentence. Write freely around them in Inkwell.</li>
+          <li><b>In Inkwell,</b> a linked note shows a thin Timecheck strip with the total time and when you last did it, and <b>▶ Start a block</b>, which adds it to your queue and starts it.</li>
+          <li><b>Add to Timecheck queue</b> is in any Inkwell note’s ⋮ menu. The note’s title becomes a block, and the note is linked to its activity.</li>
+          <li>Without Inkwell (or without connecting), those buttons are hidden and reflections stay in Timecheck.</li>
+        </ul>
       </section>
 
       <section id="journal" class="d-sec">
@@ -395,7 +426,8 @@ python native_host/install.py   # use the Python you run Onitry with
         </figure>
         <dl class="defs">
           <dt>Pages</dt><dd><code>today.html</code> is the planner, the same page in the side panel (<code>?view=panel</code>), a tab, or a new tab. <code>guard.html</code> is the gate; the URL you were trying to reach rides along after the <code>#</code>. <code>docs.html</code> is this guide. All of them re-render when storage changes, so every open copy stays in sync.</dd>
-          <dt>Shared library</dt><dd><code>lib/planner.js</code> holds the data model, dates, the queue timing, block rotation, the gate decision and weekly stats. It has no Chrome dependencies apart from the storage helpers, so the same file runs in the pages, the service worker and Node unit tests.</dd>
+          <dt>Shared library</dt><dd><code>lib/planner.js</code> holds the data model, the queue timing, block rotation, the gate decision and weekly stats. It has no Chrome dependencies apart from the storage helpers, so the same file runs in the pages, the service worker and Node unit tests.</dd>
+          <dt>Shared folder</dt><dd>Icons, color palettes, the stepper, the menu component and the date helpers come from the repository’s <code>shared/</code> folder, shared with Inkwell. Chrome can’t load files from outside an extension’s folder, so <code>scripts/sync-shared.sh</code> copies them into <code>lib/</code> in both extensions, and a test (<code>tests/shared.test.js</code>) fails if a copy drifts. Edit <code>shared/</code>, never the copies.</dd>
           <dt>Service worker</dt><dd><code>background.js</code> loads <code>lib/planner.js</code>, <code>lib/onitry.js</code> and <code>planner-bg.js</code>. It owns everything that has to keep happening with no page open: focus timers, gate rules, nudges, Onitry polling, escalation, the launcher and the review request. Pages send it commands like <code>{type: 'plan:focus', action: 'start'}</code>.</dd>
           <dt>Why storage is the hub</dt><dd>Chrome can stop the service worker whenever it’s idle, so nothing important lives in its memory. On wake-up it reads storage, recreates its alarms and re-syncs the gate.</dd>
         </dl>
@@ -584,6 +616,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td>Alarm when a block ends</td><td>On</td><td>With a Test sound button</td></tr>
             <tr><td>Plan reminder · End-of-day check-in</td><td>15:30 · 22:00</td><td></td></tr>
             <tr><td>Onitry</td><td>Off</td><td>Pairing code, auto start/stop, launch, escalation</td></tr>
+            <tr><td>Inkwell</td><td>Not connected</td><td>Connect or disconnect the Inkwell extension</td></tr>
             <tr><td>Ask how a block went</td><td>After every focus block</td><td>Only after Done, or never</td></tr>
             <tr><td>Daily break budget</td><td>45 min</td><td>Past it a break needs the off-switch code</td></tr>
             <tr><td>Off-switch code</td><td>None</td><td>4 to 6 digits, stored as a salted hash</td></tr>
@@ -603,7 +636,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>pl:focus</code></td><td>The running focus block, or nothing</td></tr>
             <tr><td><code>pl:sessions</code></td><td>Finished focus blocks (last 3000)</td></tr>
             <tr><td><code>pl:journal</code></td><td>Log entries by date (the old key name stays, so nothing is lost)</td></tr>
-            <tr><td><code>pl:activities</code></td><td>Activities: name, subject and reflections</td></tr>
+            <tr><td><code>pl:activities</code></td><td>Activities: name, subject, reflections and allowed pages</td></tr>
             <tr><td><code>pl:eod</code></td><td>End-of-day check-ins by date</td></tr>
             <tr><td><code>pl:passes</code></td><td>Live gate passes: site → expiry</td></tr>
             <tr><td><code>pl:settings</code></td><td>Everything in ⚙</td></tr>
@@ -626,6 +659,7 @@ redirect:     chrome-extension://…/guard.html#\0</code></pre>
             <tr><td><code>offscreen</code></td><td>Playing the alarm sound (service workers can’t play audio)</td></tr>
             <tr><td><code>declarativeNetRequest</code> + the gated sites</td><td>Redirecting to the gate</td></tr>
             <tr><td><code>http://127.0.0.1/*</code></td><td>Talking to Onitry</td></tr>
+            <tr><td><code>externally_connectable</code></td><td>Lets Inkwell send messages. Only the extension you approve in ⚙ is answered</td></tr>
             <tr><td><code>nativeMessaging</code></td><td>The Launch Onitry button</td></tr>
             <tr><td><code>tabs</code> (asked only if needed)</td><td>“Every new tab” mode</td></tr>
             <tr><td>Other sites (asked only if needed)</td><td>Gating sites you add yourself</td></tr>

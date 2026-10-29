@@ -579,6 +579,7 @@
     weeklyReviewDay: 0, // Sunday evening nudge
     breakBudget: 45, // minutes of breaks a day before another one needs the off-switch code
     reflect: 'every', // ask how a block went: every | done | never
+    inkwell: { id: null }, // the Inkwell extension you approved in ⚙ (its ID isn't fixed)
     offCode: null, // { salt, hash } of the 4 to 6 digit off-switch code, never the code itself
     onitry: { enabled: false, code: '', autoStart: true, autoStop: true, escalate: true, launch: true, port: 47323 },
   };
@@ -739,6 +740,7 @@
     const data = {};
     for (const [k, v] of Object.entries(all)) if (k.startsWith('pl:') && !BACKUP_SKIP.has(k)) data[k] = structuredCloneSafe(v);
     if (data['pl:settings'] && data['pl:settings'].onitry) data['pl:settings'].onitry.code = '';
+    if (data['pl:settings'] && data['pl:settings'].inkwell) data['pl:settings'].inkwell = { id: null }; // the approval belongs to this browser
     if (data['pl:meta']) delete data['pl:meta'].offUntil; // an off switch shouldn't follow a backup to another profile
     return { app: 'timecheck', format: 1, version, exported: new Date(now).toISOString(), data };
   }
@@ -824,6 +826,7 @@
       ...s,
       blocks: { ...DEFAULT_BLOCKS, ...(s.blocks || {}) },
       onitry: { ...DEFAULT_SETTINGS.onitry, ...(s.onitry || {}) },
+      inkwell: { ...DEFAULT_SETTINGS.inkwell, ...(s.inkwell || {}) },
     };
   }
 

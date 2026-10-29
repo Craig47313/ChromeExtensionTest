@@ -13,6 +13,7 @@
   const THEME_ICONS = { system: 'monitor', light: 'sun', dark: 'moon' };
   const TYPE_ICONS = { text: 'note', drawing: 'brush', sticky: 'sticky', calc: 'function' };
   const SCRATCH_ID = '__quickcalc'; // the unsaved Quick calc
+  const TIMECHECK_ID = 'dadagbofodnllhcohbhmjkdolklihcgn'; // Timecheck's fixed extension ID
   const STICKY_DEFAULT = { w: 480, h: 320 };
   const isInk = (note) => !!note && (note.type === 'drawing' || note.type === 'sticky');
 
@@ -583,6 +584,7 @@
     els.emptyState.hidden = true;
     els.editor.hidden = false;
     loadEditor(note);
+    renderTcStrip(note);
     setStatus('');
     renderList();
 
@@ -1722,6 +1724,7 @@
       { icon: 'copy', label: labels[1], run: copyCurrent },
       note.type === 'calc' && { icon: 'clear-canvas', label: 'Clear all expressions', run: () => calc.clear() },
       { icon: 'plus', label: 'Duplicate', run: duplicateCurrent },
+      tc.ok && { icon: 'plus', label: 'Add to Timecheck queue', run: addToTimecheck },
       note.sourceUrl && { icon: 'external', label: 'Open source page', run: () => window.open(note.sourceUrl, '_blank', 'noopener') },
       page.url && pageKey(page.url) !== pageKey(note.sourceUrl) && { icon: 'link', label: 'Link to current page', run: linkCurrentToPage },
       '-',
@@ -1923,6 +1926,63 @@
     if (listChanged) renderList();
   });
 
+  // ---------- Timecheck link ----------
+  // Notes can belong to a Timecheck activity (note.timecheck = { activityId }). A linked note shows a thin strip
+  // with the activity's time and a button to start a block. Timecheck ignores us until you approve it in its ⚙.
+
+  const tcCall = (msg) => chrome.runtime.sendMessage(TIMECHECK_ID, msg).catch(() => null);
+  const tc = { ok: false };
+
+  async function helloTimecheck() {
+    const res = await tcCall({ type: 'inkwell:hello', name: 'Inkwell', version: chrome.runtime.getManifest().version });
+    tc.ok = !!(res && res.connected);
+  }
+
+  const fmtMin = (m) => (m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}`);
+
+  async function renderTcStrip(note) {
+    const strip = $('#tcStrip');
+    strip.hidden = true;
+    strip.textContent = '';
+    if (!note || note.type !== 'text' || !note.timecheck || !tc.ok) return;
+    const res = await tcCall({ type: 'inkwell:stats', activityId: note.timecheck.activityId });
+    if (!res || !res.ok || state.currentId !== note.id) return;
+    const info = document.createElement('span');
+    info.className = 'tc-info';
+    const bold = document.createElement('b');
+    bold.textContent = 'Timecheck';
+    info.append(bold, res.blocks ? ` · ${fmtMin(res.total)} total · last ${res.lastAgo}` : ' · no blocks yet');
+    const go = document.createElement('button');
+    go.className = 'btn';
+    go.type = 'button';
+    go.textContent = '▶ Start a block';
+    go.title = 'Adds it to your Timecheck queue and starts it';
+    go.addEventListener('click', async () => {
+      const r = await tcCall({ type: 'inkwell:add-block', activityId: note.timecheck.activityId, start: true });
+      toast(r && r.ok ? `Started “${r.name}” in Timecheck` : 'Timecheck didn’t answer');
+    });
+    strip.append(info, go);
+    strip.hidden = false;
+  }
+
+  async function addToTimecheck() {
+    const note = currentNote();
+    if (!note) return;
+    const title = (note.title || '').trim() || 'Untitled note';
+    const res = await tcCall({ type: 'inkwell:add-block', title });
+    if (!res || !res.ok) {
+      toast('Timecheck didn’t answer');
+      return;
+    }
+    if (res.activityId) {
+      note.timecheck = { activityId: res.activityId };
+      note.lastEditor = INSTANCE;
+      await Store.put(note);
+      renderTcStrip(note);
+    }
+    toast(`Added “${res.name}” to your Timecheck queue`);
+  }
+
   // ---------- notes for the current page ----------
 
   const page = { tabId: null, url: null, title: '', drawings: 0, canRead: false };
@@ -2120,6 +2180,7 @@
 
   async function init() {
     hydrateIcons();
+    helloTimecheck().then(() => renderTcStrip(currentNote()));
     document.documentElement.classList.toggle('is-tab', IS_TAB);
     state.settings = await Store.getSettings();
     applyTheme();

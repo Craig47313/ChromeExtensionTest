@@ -2,6 +2,9 @@
 // on-page annotation injection and screenshot capture.
 importScripts('lib/store.js');
 
+// Timecheck (the planner extension) has a fixed ID, so only it can talk to us and we can introduce ourselves.
+const TIMECHECK_ID = 'dadagbofodnllhcohbhmjkdolklihcgn';
+
 const ANNOTATOR_FILES = ['lib/icons.js', 'lib/palettes.js', 'lib/ink-canvas.js', 'content/annotate.js'];
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -45,6 +48,67 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   return false;
 });
+
+// ---------- Timecheck link ----------
+
+// Introduce ourselves: Timecheck asks you to approve us the first time, then only answers our ID.
+function sayHello() {
+  chrome.runtime.sendMessage(TIMECHECK_ID, { type: 'inkwell:hello', name: 'Inkwell', version: chrome.runtime.getManifest().version }).catch(() => {});
+}
+sayHello();
+
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  // Anyone but Timecheck is ignored.
+  if (sender.id !== TIMECHECK_ID || !msg || typeof msg.type !== 'string' || !msg.type.startsWith('timecheck:')) return false;
+  handleTimecheck(msg).then(sendResponse, (err) => sendResponse({ ok: false, error: err.message }));
+  return true;
+});
+
+// The note that belongs to a Timecheck activity: the one linked to it, else an unlinked note with the
+// same title (it becomes linked), else a new one.
+async function pageForActivity(activityId, name) {
+  const title = String(name || '').trim().slice(0, 200) || 'Untitled';
+  const notes = await Store.all();
+  let note = notes.find((n) => n.timecheck && n.timecheck.activityId === activityId);
+  if (!note) {
+    note = notes.find((n) => n.type === 'text' && !n.timecheck && (n.title || '').trim().toLowerCase() === title.toLowerCase());
+    if (note) note.timecheck = { activityId };
+  }
+  if (!note) note = Store.createNote({ type: 'text', title, html: '<p><br></p>', timecheck: { activityId }, lastEditor: 'timecheck' });
+  else note.lastEditor = 'timecheck';
+  await Store.put(note);
+  return note;
+}
+
+async function handleTimecheck(msg) {
+  if (msg.type === 'timecheck:page') {
+    const note = await pageForActivity(msg.activityId, msg.name);
+    return { ok: true, noteId: note.id };
+  }
+  if (msg.type === 'timecheck:append') {
+    const note = await pageForActivity(msg.activityId, msg.name);
+    const heading = String(msg.heading || '').slice(0, 200);
+    const text = String(msg.text || '').slice(0, 5000);
+    const html = (note.html || '').replace(/<p><br><\/p>\s*$/, '');
+    note.html = `${html}<p><strong>${escapeHtml(heading)}</strong></p><p>${escapeHtml(text).replace(/\n/g, '<br>')}</p><p><br></p>`;
+    note.text = `${note.text || ''} ${heading} ${text}`.trim();
+    note.updated = Date.now();
+    await Store.put(note);
+    return { ok: true, noteId: note.id };
+  }
+  if (msg.type === 'timecheck:open') {
+    if (!(await Store.get(msg.noteId))) return { ok: false, error: 'no such note' };
+    await Store.requestOpen(msg.noteId);
+    // The side panel can only be opened by a click on Inkwell itself, so use a tab (or the one that's open).
+    const open = (await chrome.runtime.getContexts({ contextTypes: ['TAB'] })).find((c) => (c.documentUrl || '').startsWith(chrome.runtime.getURL('app.html')));
+    if (open) {
+      await chrome.tabs.update(open.tabId, { active: true });
+      await chrome.windows.update(open.windowId, { focused: true });
+    } else await chrome.tabs.create({ url: chrome.runtime.getURL('app.html?tab=1') });
+    return { ok: true };
+  }
+  return { ok: false, error: 'unknown message' };
+}
 
 // ---------- badge: how many notes you have for the current site ----------
 // Needs the optional "tabs" permission to read tab URLs; silently does nothing without it.

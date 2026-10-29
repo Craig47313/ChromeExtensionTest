@@ -46,6 +46,12 @@ Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a De
 - Download the graph as a PNG, or copy the expressions
 - Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer. Press Enter to copy it, or Ctrl+Enter to open it in Quick calc.
 
+**Timecheck (optional)**
+- If the Timecheck planner extension is also installed, Inkwell introduces itself and Timecheck asks you to approve it. After that:
+  - an activity's reflections are added to the bottom of its note as dated entries, and a linked note shows a thin Timecheck strip (total time, last session, **▶ Start a block**)
+  - a note's ⋮ menu has **Add to Timecheck queue**
+- Inkwell only talks to Timecheck's fixed extension ID, and Timecheck only answers the extension you approve. Without Timecheck nothing changes.
+
 **Draw on any web page**
 - Press **Alt+Shift+D**, right-click and choose **Draw on this page**, or use **⋯ → Draw on current page** in the panel
 - Annotations stay attached to the page as you scroll, and they're saved for that URL
@@ -109,6 +115,7 @@ You can change the Chrome-level shortcuts at `chrome://extensions/shortcuts`.
 | `contextMenus` | Right-click clipping and "Draw on this page" |
 | `activeTab`, `scripting` | Inject the drawing overlay into the current tab, but only when you ask for it |
 | `tabs` (optional) | Requested only when you turn on "Notes for the site you're on", to read the current tab's address |
+| `externally_connectable` | Lets Timecheck (and only Timecheck) send messages to Inkwell |
 | `<all_urls>` (optional) | Requested only if you start page drawing from the panel on a tab Inkwell hasn't been invoked on |
 
 Nothing is sent over the network. All data stays in your browser profile.
@@ -123,10 +130,13 @@ calc.js               calculator editor (expression rows, sliders, graph setting
 lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/sketches)
 lib/mathlib.js        safe math parser/evaluator (no eval)
 lib/graph.js          graph renderer with points of interest
-lib/palettes.js       color palettes (Onitry default)
-timecheck/             separate extension: Timecheck (planner)
+lib/palettes.js       color palettes (copy of shared/palettes.js)
+timecheck/            separate extension: Timecheck (planner)
+shared/               one source for icons, palettes, stepper, menu and date helpers
+scripts/sync-shared.sh  copies shared/ into lib/ and timecheck/lib/
+tests/shared.test.js  fails if a copy drifts
 lib/store.js          chrome.storage wrapper
-lib/icons.js          inline SVG icon set
+lib/icons.js          inline SVG icon set (copy of shared/icons.js)
 content/annotate.js   on-page drawing overlay (injected on demand, isolated in a closed shadow root)
 icons/                extension icons (icon.svg is the source)
 ```
