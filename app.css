@@ -550,7 +550,7 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
 .calc-typeset .calc-row.has-math.active .row-extra { order: 3; }
 .calc-typeset .calc-row.has-math.active .row-math { order: 2; margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 18px; opacity: 0.85; }
 .calc-row.error .row-math { opacity: 0.6; }
-.row-sym { display: flex; align-items: center; gap: 8px; font-size: 19px; color: var(--muted); overflow-x: auto; }
+.row-sym { display: flex; align-items: center; gap: 8px; font-size: 19px; color: var(--muted); overflow-x: auto; overflow-y: hidden; }
 .row-sym math { font-family: "STIX Two Math", "Cambria Math", "Latin Modern Math", "Times New Roman", serif; color: var(--text); }
 .row-sym .eq { font-size: 16px; }
 .ap-check { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; font-size: 13px; line-height: 1.4; cursor: pointer; }

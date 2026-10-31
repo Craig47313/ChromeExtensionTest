@@ -31,16 +31,21 @@ module.exports = {
     await until(async () => (await focus(page))?.title === 'Beta', { what: 'Beta to start by itself' });
     await page.waitForSelector('#advBar:not([hidden])');
     assert.match(await page.textContent('#advBar'), /Time ran out on Alpha/);
+    // One question at a time: the "how did it go?" line waits until this is answered
+    assert.equal(await page.isVisible('#reflectBar'), false);
     // Done marks Alpha finished and the prompt goes away
     await page.click('#advBar >> text=Done');
     await page.waitForSelector('#advBar', { state: 'hidden' });
+    await page.waitForSelector('#reflectBar:not([hidden])');
+    assert.match(await page.textContent('#reflectBar'), /How did Alpha go/);
     const alpha = await page.evaluate(async () => (await chrome.storage.local.get('pl:tasks'))['pl:tasks'].find((t) => t.title === 'Alpha').done);
     assert.ok(alpha, 'Alpha is done');
     // The Done-today row says how long it took
     await page.click('#doneToday summary');
     const row = await page.textContent('#doneList .task');
     assert.match(row, /Alpha/);
-    assert.match(row, /took \d+m|took 1m/);
+    assert.match(row, /took \d+m/);
+    assert.doesNotMatch(row, /⏱/, 'the estimate gives way to the time it took');
     // Again with Gamma following Beta: "Back in the queue" keeps Beta undone, and the prompt is gone for good
     await endNow(page, sw);
     await until(async () => (await focus(page))?.title === 'Gamma', { what: 'Gamma to start' });

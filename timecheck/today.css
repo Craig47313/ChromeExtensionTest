@@ -439,8 +439,9 @@ body.today-body { overflow-y: auto; background: var(--bg); }
 
 .off-grid { display: grid; grid-template-columns: minmax(100px, 130px) 1fr; align-items: end; gap: 8px; margin-bottom: 6px; }
 .off-grid label { margin: 0; }
-.off-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.off-btns { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
 .off-btns .btn { height: 36px; padding: 0 10px; }
+@media (max-width: 520px) { .off-grid { grid-template-columns: 1fr; align-items: stretch; } .off-grid label input { max-width: 160px; } }
 .tc-code { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); letter-spacing: 0.2em; }
 .tc-note { font-size: 12.5px; color: var(--muted); }
 .tc-note.warn { color: #e8590c; font-weight: 650; }

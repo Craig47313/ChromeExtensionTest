@@ -501,10 +501,10 @@
     if (chip) meta.append(chip);
     const due = dueLabel(t);
     if (due) meta.append(due);
-    if (t.estimate) meta.append(el('span', 'est', P.fmtMinutes(t.estimate)));
+    const eff = t.done ? P.taskEffort(state.sessions, t.id) : null;
+    if (t.estimate && !(eff && eff.minutes)) meta.append(el('span', 'est', P.fmtMinutes(t.estimate)));
     if (slot && !t.done) meta.append(el('span', 'slot', `${P.hhmm(slot.start)}–${P.hhmm(slot.end)}`));
-    if (t.done) {
-      const eff = P.taskEffort(state.sessions, t.id);
+    if (eff) {
       if (eff.minutes) meta.append(el('span', 'took', `took ${P.fmtMinutes(eff.minutes)}`));
       if (eff.onPct != null) meta.append(el('span', 'took', `${eff.onPct}% on task`));
     }
@@ -2083,7 +2083,8 @@
   function renderReflect() {
     const bar = $('#reflectBar');
     const r = state.reflection;
-    if (!r) {
+    // One question at a time: "did you finish?" comes first, then "how did it go?".
+    if (!r || advancedTask()) {
       bar.hidden = true;
       bar.textContent = '';
       bar.dataset.sid = '';
@@ -2131,10 +2132,15 @@
 
   // When a block ends by the clock and the next one starts by itself, the unfinished one is still on the list.
   // This asks about it once, here, so it doesn't have to be answered from a notification.
+  function advancedTask() {
+    const t = state.advancedFrom && state.focus && state.focus.id === state.advancedFocus && state.focus.taskId !== state.advancedFrom ? state.tasks.find((x) => x.id === state.advancedFrom) : null;
+    return t && !t.done ? t : null;
+  }
+
   function renderAdvanced() {
     const bar = $('#advBar');
-    const t = state.advancedFrom && state.focus && state.focus.id === state.advancedFocus && state.focus.taskId !== state.advancedFrom ? state.tasks.find((x) => x.id === state.advancedFrom) : null;
-    if (!t || t.done) {
+    const t = advancedTask();
+    if (!t) {
       bar.hidden = true;
       bar.textContent = '';
       bar.dataset.tid = '';
