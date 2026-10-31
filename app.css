@@ -579,3 +579,14 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
 .crop-size .btn { margin-left: auto; }
 .crop-dialog .dialog-actions.spread { justify-content: space-between; }
 .crop-hint .btn { height: 28px; padding: 0 12px; }
+
+/* Image and sketch sizes (right-click → Size) */
+.rich figure[data-size] img { height: auto; }
+.rich figure.media[data-size="s"] img { width: 25%; }
+.rich figure.media[data-size="m"] img { width: 50%; }
+.rich figure.media[data-size="l"] img { width: 75%; }
+.rich figure.media[data-size="f"] img { width: 100%; }
+.rich figure.sketch[data-size="s"] img { width: min(100%, 220px); }
+.rich figure.sketch[data-size="m"] img { width: min(100%, 360px); }
+.rich figure.sketch[data-size="l"] img { width: min(100%, 520px); }
+.rich figure.sketch[data-size="f"] img { width: 100%; }

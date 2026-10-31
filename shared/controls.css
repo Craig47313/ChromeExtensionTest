@@ -45,3 +45,10 @@ dialog .tc-menu { position: absolute; }
 .tc-drop:hover { border-color: var(--accent); }
 .tc-drop .tc-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-caret { font-size: 10px; color: var(--muted); }
+
+.tc-icon { display: inline-flex; flex: none; width: 16px; color: var(--muted); }
+.tc-item.danger .tc-icon { color: inherit; }
+.tc-item.has-sub.open { background: var(--accent-soft); }
+.tc-sub-caret { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: 15px; line-height: 1; }
+.tc-item .tc-hint { margin-left: auto; padding-left: 18px; }
+.tc-item .tc-hint + .tc-sub-caret { margin-left: 0; }

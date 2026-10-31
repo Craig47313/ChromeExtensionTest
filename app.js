@@ -262,6 +262,7 @@
         let keep = false;
         if (tag === 'A' && name === 'href') keep = /^(https?:|mailto:)/i.test(value);
         else if (tag === 'FIGURE' && (name === 'data-sketch' || name === 'data-img')) keep = /^[a-z0-9]{4,40}$/.test(value);
+        else if (tag === 'FIGURE' && name === 'data-size') keep = /^[smlf]$/.test(value);
         else if (tag === 'FIGURE' && name === 'class') {
           keep = value === 'sketch' || value === 'media';
         } else if (tag === 'IMG' && name === 'src') keep = /^data:image\/(png|jpe?g|gif|webp);/i.test(value) || /^https:\/\//i.test(value);
@@ -1545,9 +1546,300 @@
     drawBase();
   }
 
+  // ---------- right-click menus ----------
+  // Right-click opens a menu for what's under the pointer. Shift+right-click keeps Chrome's own menu, and
+  // right-clicking text in a note does too. Everything here is also reachable from the toolbars and shortcuts.
+
+  const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+  const SHIFT = /Mac/.test(navigator.platform) ? '⇧' : 'Shift+';
+  const COLOR_NAMES = { ink: 'Black', '#e03131': 'Red', '#f08c00': 'Orange', '#fcc419': 'Yellow', '#2f9e44': 'Green', '#1971c2': 'Blue', '#7048e8': 'Purple', '#e64980': 'Pink' };
+
+  function showMenu(x, y, items) {
+    closeMenu();
+    TCMenu.open({ anchor: { x, y }, items });
+  }
+
+  // Pictures to and from the clipboard and disk.
+  async function pngBlob(src, crop) {
+    const img = await loadImage(src);
+    const c = document.createElement('canvas');
+    const sx = crop ? crop.x * img.naturalWidth : 0;
+    const sy = crop ? crop.y * img.naturalHeight : 0;
+    const sw = crop ? crop.w * img.naturalWidth : img.naturalWidth;
+    const sh = crop ? crop.h * img.naturalHeight : img.naturalHeight;
+    c.width = Math.max(1, Math.round(sw));
+    c.height = Math.max(1, Math.round(sh));
+    c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('Couldn’t read that image'))), 'image/png'));
+  }
+
+  async function copyPicture(src, crop) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await pngBlob(src, crop) })]);
+      toast('Image copied');
+    } catch (err) {
+      toast(`Couldn’t copy: ${err.message}`);
+    }
+  }
+
+  async function savePicture(src, crop) {
+    try {
+      const note = currentNote();
+      download(`${slugify((note && note.title) || 'image')}.png`, await pngBlob(src, crop));
+    } catch (err) {
+      toast(`Couldn’t save: ${err.message}`);
+    }
+  }
+
+  function chooseImage(then) {
+    replaceImage = then;
+    imageTarget = 'replace';
+    $('#imageInput').click();
+  }
+
+  // ----- drawings, stickies and sketches -----
+
+  function openDrawMenu({ x, y, world, locked }) {
+    if (!ink) return;
+    if (locked) {
+      showMenu(x, y, [{ icon: 'unlock', label: 'Unlock', onSelect: () => ink.unlockShape(locked) }]);
+      return;
+    }
+    const sel = ink.shapes.filter((sh) => ink.selection.has(sh));
+    const items = [];
+    const key = (k, shift) => `${MOD}${shift ? SHIFT : ''}${k}`;
+
+    if (!sel.length) {
+      items.push(
+        { icon: 'paste', label: 'Paste', hint: key('V'), disabled: !ink.hasClipboard, onSelect: () => ink.paste(world) },
+        { label: 'Select all', hint: key('A'), disabled: !ink.shapes.length, onSelect: () => ink.selectAll() },
+        { icon: 'image', label: 'Insert image…', onSelect: () => { imageTarget = 'ink'; $('#imageInput').click(); } },
+        { label: 'Paper', sub: [['none', 'Plain'], ['dots', 'Dots'], ['grid', 'Grid'], ['lines', 'Lined']].map(([v, l]) => ({ label: l, checked: ink.background === v, onSelect: () => { els.bgSelect.value = v; els.bgSelect.dispatchEvent(new Event('change')); } })) },
+        { sep: true },
+        { label: 'Zoom to fit', onSelect: () => ink.zoomToFit() }
+      );
+      showMenu(x, y, items);
+      return;
+    }
+
+    const only = sel.length === 1 ? sel[0] : null;
+    const pic = only && only.type === 'image' ? only : null;
+    const uniform = (get) => sel.every((sh) => get(sh) === get(sel[0]));
+    const sized = sel.filter((sh) => sh.size != null);
+    const colorable = sel.some((sh) => sh.type !== 'image');
+
+    items.push(
+      {
+        icon: 'layers',
+        label: 'Layer',
+        sub: [
+          { label: 'Bring to front', hint: key(']', true), onSelect: () => ink.reorderSelection(true) },
+          { label: 'Bring forward', hint: key(']'), onSelect: () => ink.stepSelection(1) },
+          { label: 'Send backward', hint: key('['), onSelect: () => ink.stepSelection(-1) },
+          { label: 'Send to back', hint: key('[', true), onSelect: () => ink.reorderSelection(false) },
+        ],
+      },
+      { sep: true },
+      { icon: 'cut', label: 'Cut', hint: key('X'), onSelect: () => ink.cutSelection() },
+      { icon: 'copy', label: 'Copy', hint: key('C'), onSelect: () => ink.copySelection() },
+      { icon: 'paste', label: 'Paste', hint: key('V'), disabled: !ink.hasClipboard, onSelect: () => ink.paste(world) },
+      { icon: 'plus', label: 'Duplicate', hint: key('D'), onSelect: () => ink.duplicateSelection() },
+      { icon: 'trash', label: 'Delete', hint: 'Del', danger: true, onSelect: () => ink.deleteSelection() },
+      { sep: true }
+    );
+    if (colorable) {
+      items.push({ label: 'Colour', sub: PALETTE.map((c) => ({ label: COLOR_NAMES[c] || c, color: ink.resolveColor(c), onSelect: () => ink.recolorSelection(c) })) });
+    }
+    if (sized.length) {
+      const cur = sized.every((sh) => sh.size === sized[0].size) ? sized[0].size : null;
+      items.push({ label: 'Stroke width', sub: [['Thin', 2], ['Medium', 4], ['Thick', 8], ['Extra thick', 14]].map(([l, v]) => ({ label: l, checked: cur === v, onSelect: () => ink.setSelectionSize(v) })) });
+    }
+    const op = uniform((sh) => sh.opacity ?? 1) ? sel[0].opacity ?? 1 : null;
+    items.push({ label: 'Opacity', sub: [100, 75, 50, 25].map((p) => ({ label: `${p}%`, checked: op !== null && Math.abs(op - p / 100) < 0.01, onSelect: () => ink.setSelectionOpacity(p / 100) })) });
+    items.push(
+      { sep: true },
+      { icon: 'flip-h', label: 'Flip horizontal', onSelect: () => ink.flipSelection('x') },
+      { icon: 'flip-v', label: 'Flip vertical', onSelect: () => ink.flipSelection('y') },
+      { icon: 'lock', label: 'Lock', onSelect: () => ink.lockSelection() }
+    );
+    if (sel.length >= 2) {
+      items.push(
+        { sep: true },
+        { label: 'Align', sub: [['left', 'Left'], ['center', 'Centre'], ['right', 'Right'], ['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']].map(([m, l]) => ({ label: l, onSelect: () => ink.alignSelection(m) })) },
+        { label: 'Distribute', sub: [{ label: 'Across', disabled: sel.length < 3, onSelect: () => ink.distributeSelection('h') }, { label: 'Down', disabled: sel.length < 3, onSelect: () => ink.distributeSelection('v') }] }
+      );
+    }
+    if (pic) {
+      const flipped = !!(pic.flipX || pic.flipY);
+      items.push(
+        { sep: true },
+        { icon: 'crop', label: flipped ? 'Crop (flip it back first)' : 'Crop', disabled: flipped, onSelect: () => ink.startCrop(pic) },
+        { label: 'Reset crop', disabled: !pic.crop, onSelect: () => ink.resetCropOf(pic) },
+        { icon: 'image', label: 'Replace image…', onSelect: () => chooseImage((src, w, h) => ink.replaceImage(pic, src, w, h)) },
+        { icon: 'copy', label: 'Copy image', onSelect: () => copyPicture(pic.src, pic.crop) },
+        { icon: 'download', label: 'Save image as…', onSelect: () => savePicture(pic.src, pic.crop) }
+      );
+    }
+    showMenu(x, y, items);
+  }
+
+  // Shape copy and paste also work from the keyboard. Pictures copied elsewhere still arrive through the paste event.
+  document.addEventListener('paste', (e) => {
+    if (!drawingActive() || isEditableTarget(e.target) || e.defaultPrevented) return;
+    const hasImage = [...(e.clipboardData?.items || [])].some((i) => i.kind === 'file' && i.type.startsWith('image/'));
+    if (!hasImage && ink.hasClipboard) {
+      e.preventDefault();
+      ink.paste();
+    }
+  });
+
+  // ----- images and sketches in a note -----
+
+  const SIZES = [['s', 'Small'], ['m', 'Medium'], ['l', 'Large'], ['f', 'Full width']];
+
+  function setFigureSize(fig, size) {
+    if (size) fig.dataset.size = size;
+    else delete fig.dataset.size;
+    scheduleSave();
+  }
+
+  function replaceFigureImage(fig) {
+    chooseImage(async (src) => {
+      const note = currentNote();
+      const img = fig.querySelector('img');
+      if (!note || !img || !fig.isConnected) return;
+      img.src = src;
+      if (fig.dataset.img && note.originals) delete note.originals[fig.dataset.img]; // a new picture has no old original
+      delete fig.dataset.img;
+      scheduleSave();
+      toast('Image replaced');
+    });
+  }
+
+  function figureMenu(fig, x, y) {
+    const img = fig.querySelector('img');
+    if (!img) return;
+    const sketch = fig.classList.contains('sketch');
+    const size = fig.dataset.size || null;
+    const sizes = { label: 'Size', sub: SIZES.map(([v, l]) => ({ label: l, checked: size === v, onSelect: () => setFigureSize(fig, v) })) };
+    const remove = { icon: 'trash', label: sketch ? 'Delete sketch' : 'Delete image', danger: true, onSelect: () => deleteFigure(fig) };
+    if (sketch) {
+      showMenu(x, y, [
+        { icon: 'edit', label: 'Edit sketch', onSelect: () => openSketch(fig.dataset.sketch) },
+        sizes,
+        { icon: 'copy', label: 'Copy image', onSelect: () => copyPicture(img.src) },
+        { icon: 'download', label: 'Save image as…', onSelect: () => savePicture(img.src) },
+        { sep: true },
+        remove,
+      ]);
+      return;
+    }
+    showMenu(x, y, [
+      { icon: 'crop', label: 'Crop', disabled: !canCrop(fig), onSelect: () => openCrop(fig) },
+      sizes,
+      { icon: 'copy', label: 'Copy image', onSelect: () => copyPicture(img.src) },
+      { icon: 'download', label: 'Save image as…', onSelect: () => savePicture(img.src) },
+      { icon: 'image', label: 'Replace…', onSelect: () => replaceFigureImage(fig) },
+      { sep: true },
+      remove,
+    ]);
+  }
+
+  function deleteFigure(fig) {
+    const prev = fig.previousElementSibling;
+    const html = fig.outerHTML;
+    fig.remove();
+    if (hoverFig === fig) {
+      hoverFig = null;
+      els.figTools.hidden = true;
+    }
+    updateTextMeta();
+    scheduleSave();
+    toast('Removed', {
+      action: 'Undo',
+      onAction: () => {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = html;
+        const back = tpl.content.firstElementChild;
+        if (prev && prev.isConnected) prev.after(back);
+        else els.rich.prepend(back);
+        updateTextMeta();
+        scheduleSave();
+      },
+    });
+  }
+
+  els.rich.addEventListener('contextmenu', (e) => {
+    if (e.shiftKey) return; // Chrome's own menu
+    const fig = e.target.closest('figure');
+    if (!fig) return; // text keeps the normal text menu
+    e.preventDefault();
+    figureMenu(fig, e.clientX, e.clientY);
+  });
+
+  // ----- the notes list -----
+
+  async function duplicateNote(id) {
+    if (id === state.currentId) await saveNow();
+    const note = state.notes.get(id);
+    if (!note) return;
+    const copy = { ...structuredClone(note), id: Store.newId(), title: `${note.title || 'Untitled'} (copy)`, pinned: false, created: Date.now(), updated: Date.now(), lastEditor: INSTANCE };
+    delete copy.timecheck; // a copy isn't the activity's page
+    state.notes.set(copy.id, copy);
+    await Store.put(copy);
+    openNote(copy.id);
+    toast('Duplicated');
+  }
+
+  async function pinNote(id) {
+    if (id === state.currentId) {
+      await togglePin();
+      return;
+    }
+    const note = state.notes.get(id);
+    if (!note) return;
+    note.pinned = !note.pinned;
+    note.lastEditor = INSTANCE;
+    await Store.put(note);
+    renderList();
+  }
+
+  async function openInTab(id) {
+    if (id === state.currentId) await saveNow();
+    await Store.requestOpen(id);
+    chrome.tabs.create({ url: chrome.runtime.getURL('app.html?tab=1') });
+  }
+
+  els.list.addEventListener('contextmenu', (e) => {
+    if (e.shiftKey) return;
+    const li = e.target.closest('.note-item');
+    if (!li) return;
+    e.preventDefault();
+    const note = state.notes.get(li.dataset.id);
+    if (!note) return;
+    const id = note.id;
+    const items = [
+      { icon: 'external', label: 'Open in a tab', onSelect: () => openInTab(id) },
+      { icon: 'pin', label: note.pinned ? 'Unpin' : 'Pin to top', onSelect: () => pinNote(id) },
+      { icon: 'plus', label: 'Duplicate', onSelect: () => duplicateNote(id) },
+    ];
+    if (page.url && pageKey(page.url) !== pageKey(note.sourceUrl)) {
+      items.push({ icon: 'link', label: 'Link to current page', onSelect: async () => (await openNote(id), linkCurrentToPage()) });
+    }
+    if (tc.ok) items.push({ icon: 'plus', label: 'Add to Timecheck queue', onSelect: async () => (await openNote(id), addToTimecheck()) });
+    items.push(
+      { sep: true },
+      { icon: 'download', label: 'Export', onSelect: async () => (await openNote(id), exportCurrent()) },
+      { sep: true },
+      { icon: 'trash', label: 'Delete note', danger: true, onSelect: () => deleteNote(id) }
+    );
+    showMenu(e.clientX, e.clientY, items);
+  });
+
   // ---------- drawing editor ----------
 
   let ink = null;
+  let replaceImage = null; // what to do with the picture chosen for "Replace image…"
 
   $('#cropApplyBtn').addEventListener('click', () => ink && ink.applyCrop());
   $('#cropResetBtn').addEventListener('click', () => ink && ink.resetCrop());
@@ -1567,6 +1859,7 @@
       onHistoryChange: syncDrawUI,
       onSelectionChange: syncDrawUI,
       onToolChange: syncDrawUI,
+      onContextMenu: (info) => openDrawMenu(info),
       onCropChange: (on) => {
         $('#cropHint').hidden = !on;
       },
@@ -1702,6 +1995,13 @@
     e.target.value = '';
     if (!file) return;
     const { src, width, height } = await imageFileToDataUrl(file);
+    if (imageTarget === 'replace') {
+      imageTarget = 'ink';
+      const cb = replaceImage;
+      replaceImage = null;
+      if (cb) await cb(src, width, height);
+      return;
+    }
     if (imageTarget === 'rich') {
       imageTarget = 'ink';
       insertFigure(imageFigure(src), state.pendingRange);

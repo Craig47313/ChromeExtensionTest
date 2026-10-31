@@ -49,6 +49,15 @@ Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a De
 - Download the graph as a PNG, or copy the expressions
 - Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer. Press Enter to copy it, or Ctrl+Enter to open it in Quick calc.
 
+**Right-click menus**
+- Right-click opens a menu for what's under the pointer (the menu key or Shift+F10 works from the keyboard). **Shift+right-click** gives Chrome's own menu, and text in a note keeps the normal text menu.
+- **A shape or selection in a drawing:** Layer (bring to front, bring forward, send backward, send to back), Cut, Copy, Paste, Duplicate, Delete, Colour, Stroke width, Opacity, Flip horizontal/vertical, Lock. An image adds Crop, Reset crop, Replace image…, Copy image and Save image as…. Two or more shapes add **Align** (left, centre, right, top, middle, bottom) and **Distribute** (across, down; needs three).
+- **Empty canvas:** Paste, Select all, Insert image…, Paper, Zoom to fit.
+- **An image in a note:** Crop, Size (small, medium, large, full width), Copy image, Save image as…, Replace…, Delete. **A sketch:** Edit sketch, Size, Copy image, Save image as…, Delete.
+- **A note in the list:** Open in a tab, Pin, Duplicate, Link to current page, Add to Timecheck queue, Export, Delete.
+- Opacity, flip and lock are saved with the drawing. A locked shape can't be picked, dragged, drag-selected or erased: right-click it to unlock.
+- Layer shortcuts: **Ctrl+]** / **Ctrl+[** move a step forward / backward, **Ctrl+Shift+]** / **Ctrl+Shift+[** go to the front / back. **Ctrl+C / X / V** copy, cut and paste shapes (within Inkwell).
+
 **Crop images**
 - In a note, hover an image and press **Crop** (or double-click it). The crop window has a draggable box, aspect buttons (Free, Original, 1:1, 4:3, 16:9), width and height steppers in pixels, **Rotate**, **Reset**, **Cancel** and **Apply**.
 - Apply replaces the image with the cropped one. The original is kept beside the note, so you can re-crop later, **Reset** to bring it back, or press **Undo** in the toast.
@@ -106,7 +115,9 @@ Requires Chrome 116 or later.
 | Notes | Ctrl+click | Open a link |
 | Drawing | V P H E L A R O T M | Select, pen, highlighter, eraser, line, arrow, rect, ellipse, text, pan |
 | Drawing (selection) | Delete, Ctrl+D, Ctrl+A, arrow keys (Shift for 10px) | Delete, duplicate, select all, nudge |
-| Drawing (selection) | Ctrl+] / Ctrl+[ | Bring to front / send to back |
+| Drawing (selection) | Ctrl+] / Ctrl+[ | Forward / backward one step |
+| Drawing (selection) | Ctrl+Shift+] / Ctrl+Shift+[ | Bring to front / send to back |
+| Drawing (selection) | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste shapes |
 | Drawing | [ and ] | Smaller / larger brush |
 | Drawing | Shift while dragging | Snap lines to 45°, make perfect squares and circles |
 | Drawing | Space + drag, Ctrl+scroll | Pan, zoom |
