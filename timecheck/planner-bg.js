@@ -310,11 +310,12 @@
   async function nextScheduled(excludeId = null) {
     const [tasks, settings, sessions] = await Promise.all([P.store.get(K.tasks, []), P.getSettings(), P.store.get(K.sessions, [])]);
     const now = new Date();
-    const events = P.layoutDay({ tasks: tasks.filter((t) => t.id !== excludeId), settings, sessions, now, defaultMinutes: settings.focusMinutes });
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    // With the break budget spent, a queued break doesn't start by itself (you can still start it with the code).
+    // With the break budget spent, a queued break doesn't start by itself (you can still start it with the code),
+    // and the time it would have taken goes to the next block.
     const skipBreaks = !!settings.offCode && P.breakStatus(settings, { sessions }).over;
-    const next = events.find((e) => e.type === 'task' && e.end > nowMin && !(skipBreaks && e.task.kind === 'break')) || null;
+    const events = P.layoutDay({ tasks: tasks.filter((t) => t.id !== excludeId && !(skipBreaks && t.kind === 'break')), settings, sessions, now, defaultMinutes: settings.focusMinutes });
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const next = P.nextUp(events, nowMin);
     if (!next || next.start - nowMin > 10) return null;
     return next.task;
   }

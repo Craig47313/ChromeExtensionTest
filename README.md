@@ -154,9 +154,19 @@ lib/palettes.js       color palettes (copy of shared/palettes.js)
 timecheck/            separate extension: Timecheck (planner)
 shared/               one source for icons, palettes, stepper, menu and date helpers
 scripts/sync-shared.sh  copies shared/ into lib/ and timecheck/lib/
-tests/shared.test.js  fails if a copy drifts
+tests/*.test.js       unit tests (math, crop, drawing ops, shared drift, planner)
+tests/e2e/            browser tests: both extensions loaded in Chromium via Playwright
 lib/store.js          chrome.storage wrapper
 lib/icons.js          inline SVG icon set (copy of shared/icons.js)
 content/annotate.js   on-page drawing overlay (injected on demand, isolated in a closed shadow root)
 icons/                extension icons (icon.svg is the source)
 ```
+
+## Tests
+
+```
+node --test tests/*.test.js timecheck/tests/planner.test.js   # unit tests, no browser needed
+node tests/e2e/run.js [name-filter]                           # both extensions in real Chromium
+```
+
+The browser tests need Playwright and Chromium. They are found automatically, or set `PLAYWRIGHT_PATH` and `CHROME` to point at them.

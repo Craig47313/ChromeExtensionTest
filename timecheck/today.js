@@ -829,15 +829,17 @@
   const add = { due: null, at: null, free: false, reuse: null };
   const defaultLen = () => (typeDrop.value === 'break' ? 10 : state.settings.focusMinutes);
   let lastDefault = 30;
-  const lenStep = TCStepper.create({ value: 30, min: 5, max: 240, step: 5, unit: 'min', label: 'Length' });
+  let lenTouched = false; // the length was set by hand since the last add or type change
+  const lenStep = TCStepper.create({ value: 30, min: 5, max: 240, step: 5, unit: 'min', label: 'Length', onChange: () => (lenTouched = true) });
   $('#arLen').append(lenStep.el);
   const typeDrop = TCMenu.dropdown({
     options: [{ value: 'focus', label: 'Focus' }, { value: 'break', label: 'Break' }],
     value: 'focus',
     label: 'Type',
     onChange: () => {
-      // Swap between the focus and break defaults unless the length was set by hand.
-      if (lenStep.value === lastDefault) lenStep.set(defaultLen(), { silent: true });
+      // A new type brings its own usual length (10 for a break), unless you just set one by hand.
+      if (!lenTouched) lenStep.set(defaultLen(), { silent: true });
+      lenTouched = false;
       lastDefault = defaultLen();
     },
   });
@@ -997,6 +999,7 @@
     const tasks = titles.map((title, i) => newBlock(title, first + i));
     $('#arName').value = ''; // cleared before the write finishes, so a quick next entry isn't wiped
     Object.assign(add, { due: null, at: null, free: false, reuse: null });
+    lenTouched = false;
     renderAddRow();
     await P.addTasks(tasks);
     const later = tasks.length === 1 && tasks[0].due && tasks[0].due > P.addDays(today(), 1);
