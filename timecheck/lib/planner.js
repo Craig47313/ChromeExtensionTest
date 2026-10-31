@@ -500,6 +500,22 @@
   // ---------- breaks and the off switch ----------
 
   // Minutes of break taken on `today`: finished breaks plus the one running now.
+  // What a task took: minutes across its focus sessions, and the on-task share Onitry measured
+  // (weighted by minutes, only over sessions that had a reading).
+  function taskEffort(sessions, taskId) {
+    let minutes = 0, weighted = 0, measured = 0, count = 0;
+    for (const s of sessions || []) {
+      if (s.taskId !== taskId || s.kind === 'break') continue;
+      count++;
+      minutes += s.minutes || 0;
+      if (s.onitry && s.onitry.onPct != null) {
+        weighted += s.onitry.onPct * (s.minutes || 1);
+        measured += s.minutes || 1;
+      }
+    }
+    return { minutes, count, onPct: measured ? Math.round(weighted / measured) : null };
+  }
+
   function breakUsed({ sessions = [], focus = null, now = Date.now(), today = dateKey(new Date(now)) } = {}) {
     let used = 0;
     for (const s of sessions) if (s.kind === 'break' && dateKey(new Date(s.end)) === today) used += s.minutes || 0;
@@ -933,7 +949,7 @@
     courseIndex, courseColor, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
-    breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
+    taskEffort, breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
     actKey, activityStats, ago, suggest, syncActivities, addReflection,
     parseAllow, allowRegex, allowedBy, mergeAllow, setActivityAllow,
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,

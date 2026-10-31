@@ -415,3 +415,15 @@ test('allowed pages: YouTube links collapse to one video, sites and folders matc
   assert.ok(!ok('https://khanacademy.org/math/algebra2') && !ok('https://khanacademy.org/math'));
   assert.deepEqual(P.mergeAllow([allow[0]], [allow[0], allow[1]]).map((e) => e.value), [allow[0].value, allow[1].value]);
 });
+
+test('taskEffort adds up a task\'s sessions and weights the on-task share by minutes', () => {
+  const sessions = [
+    { taskId: 'a', minutes: 20, onitry: { onPct: 90 } },
+    { taskId: 'a', minutes: 10, onitry: { onPct: 60 } },
+    { taskId: 'a', minutes: 5, onitry: null },
+    { taskId: 'b', minutes: 99, onitry: { onPct: 1 } },
+    { taskId: 'a', minutes: 10, kind: 'break' },
+  ];
+  assert.deepEqual(P.taskEffort(sessions, 'a'), { minutes: 35, count: 3, onPct: 80 });
+  assert.deepEqual(P.taskEffort(sessions, 'zzz'), { minutes: 0, count: 0, onPct: null });
+});

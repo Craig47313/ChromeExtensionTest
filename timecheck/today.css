@@ -465,6 +465,8 @@ body.today-body { overflow-y: auto; background: var(--bg); }
 }
 .rf-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .rf-row .btn { height: 34px; padding: 0 12px; }
+#advBar .rf-row { flex-wrap: wrap; }
+.task-meta .took { color: var(--muted); }
 
 .ar-sugg { list-style: none; margin: 6px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .sg { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }

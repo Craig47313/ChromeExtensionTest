@@ -128,6 +128,8 @@
     state.reviews = d[K.reviews] || {};
     state.activities = d[K.activities] || [];
     state.reflection = (d[K.meta] || {}).pendingReflection || null;
+    state.advancedFrom = (d[K.meta] || {}).advancedFrom || null;
+    state.advancedFocus = (d[K.meta] || {}).advancedFocus || null;
     state.inkwellPending = (d[K.meta] || {}).inkwellPending || null;
     if (!state.onitry) state.onitry = d[K.onitry] || null;
   }
@@ -156,6 +158,7 @@
     renderAddRow();
     renderNow();
     renderReflect();
+    renderAdvanced();
     renderInkwell();
     if (openActId) renderActivity();
     renderWeek();
@@ -500,6 +503,11 @@
     if (due) meta.append(due);
     if (t.estimate) meta.append(el('span', 'est', P.fmtMinutes(t.estimate)));
     if (slot && !t.done) meta.append(el('span', 'slot', `${P.hhmm(slot.start)}–${P.hhmm(slot.end)}`));
+    if (t.done) {
+      const eff = P.taskEffort(state.sessions, t.id);
+      if (eff.minutes) meta.append(el('span', 'took', `took ${P.fmtMinutes(eff.minutes)}`));
+      if (eff.onPct != null) meta.append(el('span', 'took', `${eff.onPct}% on task`));
+    }
     if (meta.childNodes.length) body.append(meta);
     li.append(body);
 
@@ -2116,6 +2124,49 @@
     });
     const row = el('div', 'rf-row');
     row.append(input, save, skip);
+    bar.append(q, row);
+  }
+
+  // ---------- "Time ran out on X: done, or back in the queue?" ----------
+
+  // When a block ends by the clock and the next one starts by itself, the unfinished one is still on the list.
+  // This asks about it once, here, so it doesn't have to be answered from a notification.
+  function renderAdvanced() {
+    const bar = $('#advBar');
+    const t = state.advancedFrom && state.focus && state.focus.id === state.advancedFocus && state.focus.taskId !== state.advancedFrom ? state.tasks.find((x) => x.id === state.advancedFrom) : null;
+    if (!t || t.done) {
+      bar.hidden = true;
+      bar.textContent = '';
+      bar.dataset.tid = '';
+      return;
+    }
+    if (bar.dataset.tid === t.id && !bar.hidden) return;
+    bar.dataset.tid = t.id;
+    bar.hidden = false;
+    bar.textContent = '';
+    const q = el('div', 'rf-q');
+    q.append('Time ran out on ', el('b', null, t.title), '. Did you finish it?');
+    const clear = () => P.store.update(K.meta, {}, (m) => ({ ...m, advancedFrom: null }));
+    const done = el('button', 'btn primary', '✓ Done');
+    done.type = 'button';
+    done.addEventListener('click', async () => {
+      await P.updateTask(t.id, { done: Date.now() });
+      await P.log(`✓ ${t.title}`, 'done');
+      await clear();
+      toast(`Done: ${t.title}`, { action: 'Undo', onAction: () => P.updateTask(t.id, { done: null }) });
+    });
+    const back = el('button', 'btn', 'Back in the queue');
+    back.type = 'button';
+    back.title = 'It stays on the list and comes round again';
+    back.addEventListener('click', async () => {
+      await P.updateTask(t.id, { order: Date.now(), at: null });
+      await clear();
+    });
+    const keep = el('button', 'btn ghost', 'Leave it');
+    keep.type = 'button';
+    keep.addEventListener('click', clear);
+    const row = el('div', 'rf-row');
+    row.append(done, back, keep);
     bar.append(q, row);
   }
 

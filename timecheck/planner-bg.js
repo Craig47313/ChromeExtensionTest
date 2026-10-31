@@ -766,6 +766,9 @@
         // Back to back: close this block and start the next one right away.
         await P.store.update(K.meta, {}, (m) => ({ ...m, advancedFrom: focus.kind === 'break' ? null : focus.taskId }));
         await advance('timeup');
+        // The in-app prompt about the unfinished block belongs to the block that just started.
+        const started = await P.store.get(K.focus, null);
+        await P.store.update(K.meta, {}, (m) => ({ ...m, advancedFocus: started ? started.id : null }));
         const head = focus.kind === 'break' ? 'Break’s over' : `Time’s up: ${focus.title}`;
         const body = `Now: ${next.title}${next.kind === 'break' ? '' : ` (${P.fmtMinutes(P.taskMinutes(next, settings.focusMinutes))})`}.${focus.kind === 'break' ? '' : ' Did you finish?'}`;
         ringAlarm(2);
@@ -816,6 +819,7 @@
       const buttons = meta.advancedFrom ? ['done', 'pause'] : ['pause'];
       if (buttons[index] === 'done' && meta.advancedFrom) {
         await P.updateTask(meta.advancedFrom, { done: Date.now() });
+        await P.store.update(K.meta, {}, (m) => ({ ...m, advancedFrom: null }));
         await P.log('✓ Marked done from the notification', 'done');
       } else if (buttons[index] === 'pause') await focusPause();
     } else if (id === 'paused') {
