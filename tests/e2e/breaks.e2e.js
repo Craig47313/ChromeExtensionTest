@@ -153,4 +153,31 @@ module.exports = {
     assert.deepEqual(errors, []);
     await ctx.close();
   },
+
+  async 'a break cannot run past what is left of the budget, and wrong codes lock for a while'() {
+    const { ctx, page, errors } = await openTimecheck({ width: 420 });
+    await setup(page);
+    await page.evaluate(async () => {
+      const P = InkPlan;
+      const t = Date.now();
+      await P.setSettings({ breakBudget: 20, offCode: await P.makeOffCode('4321') });
+      await P.store.update('pl:sessions', [], (a) => a.concat([{ id: 'x', title: 'Break', kind: 'break', start: t - 1e6, end: t - 1000, minutes: 15, outcome: 'done' }]));
+    });
+    await page.waitForTimeout(500);
+    // 5 minutes are left: asking for 30 gives 5
+    const r = await page.evaluate(() => chrome.runtime.sendMessage({ type: 'plan:focus', action: 'start', title: 'Break', kind: 'break', minutes: 30 }));
+    assert.equal(r.focus.minutes, 5, 'the break is cut to what is left');
+    // it can't be stretched with +5 either
+    const ext = await page.evaluate(() => chrome.runtime.sendMessage({ type: 'plan:focus', action: 'extend', minutes: 5 }));
+    assert.equal(ext.ok, false);
+    assert.equal(ext.error, 'budget');
+    await page.evaluate(() => chrome.runtime.sendMessage({ type: 'plan:focus', action: 'stop' }));
+    // five wrong codes lock the code for a few minutes, even the right one
+    for (let i = 0; i < 5; i++) await page.evaluate(() => chrome.runtime.sendMessage({ type: 'plan:offswitch', code: '1111', choice: '15m' }));
+    const locked = await page.evaluate(() => chrome.runtime.sendMessage({ type: 'plan:offswitch', code: '4321', choice: '15m' }));
+    assert.equal(locked.error, 'locked');
+    assert.equal(await rules(page) > 0, true, 'the gate stays up');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  },
 };

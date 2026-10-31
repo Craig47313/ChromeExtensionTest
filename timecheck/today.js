@@ -449,7 +449,7 @@
           else if (res && res.error === 'budget') {
             err.textContent = res.wrong ? 'That code isn’t right.' : 'Enter your off-switch code to take this break.';
             if (code) code.focus();
-          } else err.textContent = (res && res.error) || 'Couldn’t start the break.';
+          } else err.textContent = res && res.error === 'locked' ? lockedMsg(res) : (res && res.error) || 'Couldn’t start the break.';
         });
         box.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' && !e.target.closest('button')) go.click();
@@ -549,8 +549,12 @@
 
   let layoutCache = [];
 
+  const lockedMsg = (res) => `Too many wrong tries. Try again in ${Math.max(1, Math.ceil(res.locked / 60000))} min.`;
+
   function computeLayout() {
-    layoutCache = P.layoutDay({ tasks: state.tasks, focus: state.focus, sessions: state.sessions, settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes });
+    // Past the break budget (with a code set) a queued break doesn't start by itself, so it takes no time here either.
+    const skipBreaks = !!state.settings.offCode && P.breakStatus(state.settings, { sessions: state.sessions }).over;
+    layoutCache = P.layoutDay({ tasks: skipBreaks ? state.tasks.filter((t) => t.kind !== 'break' || (state.focus && state.focus.taskId === t.id)) : state.tasks, focus: state.focus, sessions: state.sessions, settings: state.settings, today: today(), now: new Date(), defaultMinutes: state.settings.focusMinutes });
     return layoutCache;
   }
 
@@ -1770,7 +1774,7 @@
           $('#offUse').value = '';
           offMsg(`Off until ${P.fmtTime(res.until)}.`);
           renderOffStatus();
-        } else offMsg(res && res.error === 'wrong' ? 'That code isn’t right.' : 'Couldn’t turn it off.', true);
+        } else offMsg(res && res.error === 'wrong' ? 'That code isn’t right.' : res && res.error === 'locked' ? lockedMsg(res) : 'Couldn’t turn it off.', true);
       });
       box.append(b);
     }

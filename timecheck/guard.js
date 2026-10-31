@@ -176,7 +176,7 @@
       b.addEventListener('click', async () => {
         const res = await chrome.runtime.sendMessage({ type: 'plan:offswitch', code: $('#offCode').value, choice: c.id });
         if (res && res.ok) location.replace(target || `https://${site}`);
-        else $('#offMsg').textContent = res && res.error === 'wrong' ? 'That code isn’t right.' : 'Couldn’t turn the gate off.';
+        else $('#offMsg').textContent = res && res.error === 'wrong' ? 'That code isn’t right.' : res && res.error === 'locked' ? `Too many wrong tries. Try again in ${Math.max(1, Math.ceil(res.locked / 60000))} min.` : 'Couldn’t turn the gate off.';
       });
       $('#offChoices').appendChild(b);
     }

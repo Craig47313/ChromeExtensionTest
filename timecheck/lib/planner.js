@@ -949,7 +949,7 @@
     courseIndex, courseColor, makeTask, newId, isOpen,
     todayTasks, upcoming, overdue, schedule, urgentTasks,
     inWorkHours, inFreeBlock, guardState, isFocusing,
-    taskEffort, breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
+    escapeRe: esc, taskEffort, breakUsed, breakStatus, validCode, hashCode, makeOffCode, checkOffCode, OFF_CHOICES, offWindow,
     actKey, activityStats, ago, suggest, syncActivities, addReflection,
     parseAllow, allowRegex, allowedBy, mergeAllow, setActivityAllow,
     taskMinutes, focusEndsAt, badgeFor, layoutDay, nextUp, queueRows, queueIds, orderFor, moveId, nextOrder, domainOf, matchSite,

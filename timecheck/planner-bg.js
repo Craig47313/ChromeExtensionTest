@@ -23,6 +23,8 @@
   const ESCALATE_MINUTES = 10;
   const TODAY_URL = () => chrome.runtime.getURL('today.html');
   let lastGuardKey = null;
+  let lastSites = []; // the sites the current rules gate, to tell which ones just turned on
+  let lastAllow = []; // pages allowed by the current rules
   let lastOnitryStatus = null;
 
   const PlanBg = { focusActive: false };
@@ -119,9 +121,14 @@
     const offNow = (meta.offUntil || 0) > Date.now();
     if (isBreak) minutes = Math.max(1, Math.min(240, Math.round(minutes || 10)));
     // Past the day's break budget a break needs the off-switch code (when one is set).
-    if (isBreak && settings.offCode && !(existing && existing.kind === 'break')) {
+    if (isBreak && settings.offCode) {
       const bs = await breakBudget(settings, existing);
-      if (bs.over && !(await P.checkOffCode(code, settings.offCode))) return { ok: false, error: 'budget', used: bs.used, budget: bs.budget, wrong: !!code };
+      const tried = code ? await tryCode(code, settings) : { ok: false };
+      const coded = tried.ok;
+      if (tried.locked) return { ok: false, error: 'locked', locked: tried.locked };
+      if (bs.over && !coded) return { ok: false, error: 'budget', used: bs.used, budget: bs.budget, wrong: !!code };
+      // Without the code a break can't run past what's left of the day's budget.
+      if (!coded) minutes = Math.max(1, Math.min(minutes, bs.left));
     }
     if (existing) await focusStop('switched', { quiet: true, keepOnitry: true });
     const now = Date.now();
@@ -281,6 +288,26 @@
     return P.breakStatus(settings, { sessions, focus });
   }
 
+  // Check the off-switch code, with a short lockout after a few wrong tries so it can't be guessed in a loop.
+  // Returns { ok } or { ok: false, locked: msUntilItOpens }.
+  const CODE_TRIES = 5;
+  const CODE_LOCK_MS = 5 * 60000;
+  async function tryCode(code, settings) {
+    const meta = await P.store.get(K.meta, {});
+    const f = meta.codeFails || { n: 0, until: 0 };
+    if (f.until > Date.now()) return { ok: false, locked: f.until - Date.now() };
+    if (await P.checkOffCode(code, settings.offCode)) {
+      if (f.n) await P.store.update(K.meta, {}, (m) => ({ ...m, codeFails: null }));
+      return { ok: true };
+    }
+    if (code != null && code !== '') {
+      const n = (f.n || 0) + 1;
+      const next = n >= CODE_TRIES ? { n: 0, until: Date.now() + CODE_LOCK_MS } : { n, until: 0 };
+      await P.store.update(K.meta, {}, (m) => ({ ...m, codeFails: next }));
+    }
+    return { ok: false };
+  }
+
   // The off-switch code turns the gate off and pauses (or stops) Onitry for a while.
   async function offSwitch({ code, choice }) {
     const settings = await P.getSettings();
@@ -292,7 +319,9 @@
       return { ok: true };
     }
     if (!settings.offCode) return { ok: false, error: 'nocode' };
-    if (!(await P.checkOffCode(code, settings.offCode))) return { ok: false, error: 'wrong' };
+    const tried = await tryCode(code, settings);
+    if (tried.locked) return { ok: false, error: 'locked', locked: tried.locked };
+    if (!tried.ok) return { ok: false, error: 'wrong' };
     const win = P.offWindow(choice);
     if (!win) return { ok: false, error: 'choice' };
     await P.store.update(K.meta, {}, (m) => ({ ...m, offUntil: win.until, escalatedUntil: 0 }));
@@ -345,6 +374,17 @@
   async function focusExtend(minutes = 10) {
     const focus = await P.store.get(K.focus, null);
     if (!focus) return { ok: false };
+    if (focus.kind === 'break') {
+      const settings = await P.getSettings();
+      if (settings.offCode) {
+        const left = (await breakBudget(settings, focus)).left;
+        const planned = Math.max(0, Math.round((focus.endsAt - Date.now()) / 60000));
+        // The budget counts time taken, so only the part of a break that's still ahead is unspent.
+        const room = Math.floor(left - planned);
+        if (room <= 0) return { ok: false, error: 'budget' };
+        minutes = Math.min(minutes, room);
+      }
+    }
     focus.endsAt = Math.max(focus.endsAt, Date.now()) + minutes * 60000;
     focus.timeUpAt = null;
     await P.store.set(K.focus, focus);
@@ -432,7 +472,7 @@
 
   // ---------- distraction gate ----------
 
-  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapeRe = P.escapeRe;
 
   async function activePasses() {
     const passes = await P.store.get(K.passes, {});
@@ -466,8 +506,10 @@
     else chrome.alarms.clear(PASS_EXPIRE);
 
     if (!force && key === lastGuardKey) return gs;
-    const turnedOn = sites.filter((s) => !(lastGuardKey ? JSON.parse(lastGuardKey) : []).includes(s));
+    const turnedOn = sites.filter((s) => !lastSites.includes(s));
     lastGuardKey = key;
+    lastSites = sites;
+    lastAllow = allow;
 
     // One small regex per site: a single alternation of every site blows RE2's memory limit.
     const addRules = sites.map((site, i) => ({
@@ -495,19 +537,21 @@
       if (meta.guardError) await P.store.set(K.meta, { ...meta, guardError: null });
     } catch (err) {
       lastGuardKey = null; // try again next time
+      lastSites = [];
       console.error('Timecheck gate rules failed', err);
       await P.store.update(K.meta, {}, (m) => ({ ...m, guardError: String(err && err.message) }));
     }
     // Sites that just became gated: send already-open tabs to the gate too.
-    if (turnedOn.length) await gateOpenTabs(turnedOn);
+    if (turnedOn.length) await gateOpenTabs(turnedOn, allow);
     return gs;
   }
 
-  async function gateOpenTabs(sites) {
+  // `allow`: pages the running block may open; a tab already on one stays where it is.
+  async function gateOpenTabs(sites, allow = lastAllow) {
     const patterns = sites.map((s) => `*://*.${s}/*`);
     const tabs = await chrome.tabs.query({ url: patterns }).catch(() => []);
     for (const tab of tabs) {
-      if (tab.url && !tab.url.startsWith(chrome.runtime.getURL(''))) {
+      if (tab.url && !tab.url.startsWith(chrome.runtime.getURL('')) && !P.allowedBy(allow, tab.url)) {
         chrome.tabs.update(tab.id, { url: `${chrome.runtime.getURL('guard.html')}#${tab.url}` }).catch(() => {});
       }
     }
@@ -562,6 +606,7 @@
     if (wasEscalated) return; // just extend it
     await P.store.set(K.passes, {});
     lastGuardKey = null; // treat every site as newly gated so open tabs get sent to the gate
+    lastSites = [];
     await syncGuard(true);
     await P.log(`Onitry: off task during ${focus.title}${st.activity ? ` (${st.activity})` : ''} — gate locked ${ESCALATE_MINUTES}m`, 'nudge');
     await notify('escalate', 'Onitry caught you off task', `Back to “${focus.title}”. Distracting sites are locked for ${ESCALATE_MINUTES} minutes.`, ['Open planner'], true);
