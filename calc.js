@@ -244,12 +244,17 @@
         this.onChange();
       });
       input.addEventListener('keydown', (e) => this._onKey(e, row));
+      // The caret moves without the text changing (arrows, clicks, selection), so redraw the typeset caret too.
+      const moved = () => requestAnimationFrame(() => this._renderMath(row));
+      for (const ev of ['keyup', 'click', 'select']) input.addEventListener(ev, moved);
       input.addEventListener('focus', () => {
         node.classList.add('active');
+        moved();
         this.select(GRAPHABLE.has((this.results[this.rows.indexOf(row)] || {}).kind) ? row.id : null);
       });
       input.addEventListener('blur', () => {
         node.classList.remove('active');
+        this._renderMath(row);
         // Show any error message once the user leaves the row.
         const i = this.rows.indexOf(row);
         if (i >= 0 && this.results[i]) this._renderExtra(row, this.results[i], this.els.get(row.id));
@@ -284,7 +289,9 @@
     _renderMath(row, texts = this.rows.map((r) => r.text)) {
       const e = this.els.get(row.id);
       if (!e) return;
-      const html = this.typeset ? InkMath.typeset(row.text, texts) : null;
+      // The row being edited shows its own typeset form with a caret where the cursor is, like Desmos.
+      const typing = e.el.classList.contains('active') && document.activeElement === e.input && e.input.selectionStart === e.input.selectionEnd;
+      const html = this.typeset ? InkMath.typeset(row.text, texts, typing ? e.input.selectionStart : null) : null;
       if (e.math.dataset.src !== (html || '')) {
         e.math.innerHTML = html || '';
         e.math.dataset.src = html || '';

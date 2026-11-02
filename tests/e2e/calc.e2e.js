@@ -36,22 +36,38 @@ module.exports = {
     await ctx.close();
   },
 
-  async 'click to edit shows the plain text with a preview; typing updates; the setting turns it all off'() {
+  async 'click to edit types in the typeset row with a caret; the setting turns it all off'() {
     const { ctx, page, errors } = await openInkwell();
     await openCalc(page, ['y = x^2/4']);
     const row = '#calcRows .calc-row:nth-child(1)';
     assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width < 5), true, 'the text input is tucked away while the row is typeset');
     await page.mouse.click(...(await page.$eval(`${row} .row-math`, (m) => { const r = m.getBoundingClientRect(); return [r.x + 20, r.y + 10]; })));
     await page.waitForTimeout(200);
-    assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width > 50), true, 'clicking reveals the plain text');
+    // editing happens in the typeset row itself, with a caret in it (no separate preview underneath)
+    assert.equal(await page.$eval(`${row} .row-input`, (i) => i === document.activeElement), true, 'the row is focused');
+    assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width < 5), true, 'the plain box stays out of the way');
+    assert.ok(await page.$(`${row} .row-math .math-caret`), 'the typeset row has a caret');
     assert.equal(await page.inputValue(`${row} .row-input`), 'y = x^2/4');
-    await page.fill(`${row} .row-input`, 'y = sqrt(x)');
+    // typing "/" gives a fraction with the caret waiting in the denominator
+    await page.fill(`${row} .row-input`, 'y = t/');
     await page.waitForTimeout(150);
-    assert.ok(await page.$(`${row} .row-math msqrt`), 'the preview follows what you type');
-    // a half-typed row can't be typeset: it stays as text until it parses
-    await page.fill(`${row} .row-input`, 'y = x^');
+    assert.equal(await page.$eval(`${row} .row-math mfrac`, (f) => !!f.querySelector('.math-caret')), true, 'the caret sits in the denominator');
+    await page.fill(`${row} .row-input`, 'y = sqrt(x');
+    await page.waitForTimeout(150);
+    assert.ok(await page.$(`${row} .row-math msqrt`), 'an unclosed bracket still shows as typeset');
+    // moving the caret with the arrow keys moves it in the typeset view
+    await page.fill(`${row} .row-input`, 'y = x^2/4');
+    await page.keyboard.press('End');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForTimeout(150);
+    assert.ok(await page.$(`${row} .row-math .math-caret`));
+    assert.equal(await page.$eval(`${row} .row-math`, (m) => m.querySelector('mfrac').children[0].contains(m.querySelector('.math-caret'))), true, 'the caret moved out of the denominator and into the numerator');
+    // a half-typed row that can't be read at all stays as plain text until it parses
+    await page.fill(`${row} .row-input`, 'y = x^*');
     await page.waitForTimeout(150);
     assert.equal(await page.$eval(`${row} .row-math`, (m) => m.innerHTML), '');
+    assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width > 50), true, 'plain text shows while it is unreadable');
     await page.fill(`${row} .row-input`, 'y = x^2');
     await page.keyboard.press('Tab');
     // turn it off in Appearance
