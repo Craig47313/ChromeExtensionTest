@@ -236,7 +236,8 @@
       const node = el('div', { class: 'calc-row' }, [el('div', { class: 'row-gutter' }, [num, icon]), el('div', { class: 'row-main' }, [math, input, extra]), del]);
       node.dataset.id = row.id;
 
-      input.addEventListener('input', () => {
+      input.addEventListener('input', (ev) => {
+        this._fractionKeys(input, ev);
         row.text = input.value;
         this._ensureTrailing();
         this._renumber();
@@ -264,9 +265,55 @@
       return node;
     }
 
+    // Desmos-style fractions: typing "/" opens a denominator that keeps everything you type until you step out
+    // with →, ")" or Enter. The text stays plain: "t/" becomes "t/(" + caret + ")".
+    _fractionKeys(input, ev) {
+      if (!this.typeset || !ev || ev.inputType !== 'insertText') return;
+      if (ev.data === '(') {
+        // Brackets close themselves (typing ")" later steps over the closer).
+        const p = input.selectionStart;
+        if (p !== input.selectionEnd || (input.value[p] && !/[\s)]/.test(input.value[p]))) return;
+        input.value = `${input.value.slice(0, p)})${input.value.slice(p)}`;
+        input.setSelectionRange(p, p);
+        return;
+      }
+      if (ev.data !== '/') return;
+      const at = input.selectionStart;
+      if (at !== input.selectionEnd || input.value[at - 1] !== '/') return;
+      const before = input.value.slice(0, at - 1);
+      if (!before.trim() || /(^|[^a-zA-Z0-9_])d$/.test(before) || /\/\s*$/.test(before)) return; // nothing to divide, d/dx, or "//"
+      const after = input.value.slice(at);
+      input.value = `${input.value.slice(0, at)}()${after}`;
+      input.setSelectionRange(at + 1, at + 1);
+    }
+
+    // Keys that step over a ")" added automatically, and take an empty "()" away together.
+    _bracketKeys(e, input) {
+      if (e.ctrlKey || e.metaKey || e.altKey || !this.typeset || input.selectionStart !== input.selectionEnd) return false;
+      const at = input.selectionStart;
+      const next = input.value[at];
+      if (e.key === ')' && next === ')') {
+        const open = (input.value.slice(0, at).match(/\(/g) || []).length - (input.value.slice(0, at).match(/\)/g) || []).length;
+        if (open > 0) {
+          e.preventDefault();
+          input.setSelectionRange(at + 1, at + 1);
+          return true;
+        }
+      }
+      if (e.key === 'Backspace' && next === ')' && input.value[at - 1] === '(') {
+        e.preventDefault();
+        input.value = input.value.slice(0, at - 1) + input.value.slice(at + 1);
+        input.setSelectionRange(at - 1, at - 1);
+        input.dispatchEvent(new Event('input'));
+        return true;
+      }
+      return false;
+    }
+
     _onKey(e, row) {
       const i = this.rows.indexOf(row);
       const e2 = this.els.get(row.id);
+      if (this._bracketKeys(e, e2.input)) return;
       if (e.key === 'Enter') {
         e.preventDefault();
         const next = this.rows[i + 1];

@@ -80,6 +80,42 @@ module.exports = {
     await ctx.close();
   },
 
+  async 'typing / opens a denominator that keeps what you type, like Desmos'() {
+    const { ctx, page, errors } = await openInkwell();
+    await openCalc(page, ['']);
+    const row = '#calcRows .calc-row:nth-child(1)';
+    const input = `${row} .row-input`;
+    await page.click(input, { force: true });
+    await page.keyboard.type('t/2+x');
+    await page.waitForTimeout(200);
+    assert.equal(await page.inputValue(input), 't/(2+x)', 'the denominator took the rest');
+    assert.equal(await page.$eval(`${row} .row-math mfrac`, (f) => f.children[1].textContent.replace(/\s/g, '')), '2+x');
+    // → steps out of the denominator; what follows is outside the fraction
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.type('+1');
+    await page.waitForTimeout(150);
+    assert.equal(await page.inputValue(input), 't/(2+x)+1');
+    // typing ")" steps over the closing bracket instead of doubling it; what follows still sits in the denominator
+    await page.fill(input, '');
+    await page.keyboard.type('a/(b+c)+d');
+    assert.equal(await page.inputValue(input), 'a/((b+c)+d)');
+    // Backspace right after the slash takes the pair away together
+    await page.fill(input, '');
+    await page.keyboard.type('x/');
+    assert.equal(await page.inputValue(input), 'x/()');
+    await page.keyboard.press('Backspace');
+    assert.equal(await page.inputValue(input), 'x/');
+    // nothing to divide, and d/dx, are left alone
+    await page.fill(input, '');
+    await page.keyboard.type('/');
+    assert.equal(await page.inputValue(input), '/');
+    await page.fill(input, '');
+    await page.keyboard.type('d/dx x^2');
+    assert.equal(await page.inputValue(input), 'd/dx x^2');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  },
+
   async 'the Appearance dialog has the typeset switch and it sticks'() {
     const { ctx, page, errors } = await openInkwell();
     await openAppearance(page);
