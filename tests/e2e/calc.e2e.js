@@ -63,11 +63,16 @@ module.exports = {
     await page.waitForTimeout(150);
     assert.ok(await page.$(`${row} .row-math .math-caret`));
     assert.equal(await page.$eval(`${row} .row-math`, (m) => m.querySelector('mfrac').children[0].contains(m.querySelector('.math-caret'))), true, 'the caret moved out of the denominator and into the numerator');
-    // a half-typed row that can't be read at all stays as plain text until it parses
+    // text that can't be read yet is still shown in the row, as typed, with the caret in it
     await page.fill(`${row} .row-input`, 'y = x^*');
     await page.waitForTimeout(150);
-    assert.equal(await page.$eval(`${row} .row-math`, (m) => m.innerHTML), '');
-    assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width > 50), true, 'plain text shows while it is unreadable');
+    assert.match(await page.$eval(`${row} .row-math`, (m) => m.textContent), /y\s*=\s*x\^\*/);
+    assert.ok(await page.$(`${row} .row-math .math-caret`));
+    assert.equal(await page.$eval(`${row} .row-input`, (i) => i.getBoundingClientRect().width < 5), true, 'the plain box never comes back while typing');
+    // an empty row shows just the caret
+    await page.fill(`${row} .row-input`, '');
+    await page.waitForTimeout(150);
+    assert.ok(await page.$(`${row} .row-math .math-caret`), 'an empty row has a caret to type into');
     await page.fill(`${row} .row-input`, 'y = x^2');
     await page.keyboard.press('Tab');
     // turn it off in Appearance
