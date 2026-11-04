@@ -47,6 +47,7 @@ Inkwell is a Manifest V3 Chrome extension for notes, drawings, stickies and a De
 - **Integrals:** `int(x^2, x, 0, 1)` or `int_0^1 x^2 dx` (also `∫`, `integral`). Bounds can be `inf` or `∞`, and a bound can be `x`, so `F(x) = int(sin(t), t, 0, x)` draws the area function. Computed numerically (adaptive Gauss–Kronrod).
 - **Typeset rows:** each row is drawn like LaTeX: fractions, roots, exponents, `∫` with limits, `d/dx`, Greek names. Click a row to edit its plain text (a typeset preview shows underneath). **Appearance → Calculator** turns this off for plain text rows.
 - Download the graph as a PNG, or copy the expressions
+- **Periodic table** (the atom icon in the header, or New ▾ → Periodic table) floats in a corner and stays there while you move between notes. Click an element, or type a symbol, name or number in its search box. The chips under the table copy the atomic number, atomic mass and electronegativity as bare numbers, ready to paste into a calculator row. The ▸ button shows everything else (ionization energy, electron affinity, density, melting and boiling points in K and °C, radius, configuration, oxidation states) and the isotope list (mass, abundance, half-life, spin), each value one click to copy. ⇲ moves it to the next corner; Esc closes it. Data comes from the `mendeleev` package (MIT); `scripts/build-elements.py` regenerates `lib/elements.js`.
 - Quick math anywhere: type something like `12*4+sqrt(9)` in the search box to see the answer. Press Enter to copy it, or Ctrl+Enter to open it in Quick calc.
 
 **Right-click menus**
@@ -149,6 +150,7 @@ calc.js               calculator editor (expression rows, sliders, graph setting
 lib/ink-canvas.js     vector drawing engine (free canvas + fixed-size stickies/sketches)
 lib/mathlib.js        safe math parser/evaluator (no eval): derivatives, integrals, typesetting
 lib/crop.js           crop geometry (crop window and drawing images)
+lib/ptable.js         the floating periodic table; lib/elements.js is its generated data
 lib/graph.js          graph renderer with points of interest
 lib/palettes.js       color palettes (copy of shared/palettes.js)
 timecheck/            separate extension: Timecheck (planner)

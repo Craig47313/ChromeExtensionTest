@@ -2101,6 +2101,26 @@
   }
 
   $('#quickCalcBtn').addEventListener('click', () => openQuickCalc());
+
+  // The periodic table: a panel in a corner that stays while you move between notes.
+  let ptable = null;
+  function ensurePTable() {
+    if (ptable) return ptable;
+    ptable = InkPTable.create({
+      host: document.body,
+      state: state.settings.ptable || {},
+      toast,
+      onChange: (s) => {
+        for (const b of ['#ptableBtn', '#ptableBtn2']) {
+          $(b).classList.toggle('on', !!s.open);
+          $(b).setAttribute('aria-pressed', String(!!s.open));
+        }
+        Store.setSettings({ ptable: s }).then((next) => (state.settings = next));
+      },
+    });
+    return ptable;
+  }
+  for (const b of ['#ptableBtn', '#ptableBtn2']) $(b).addEventListener('click', () => ensurePTable().toggle());
   $('#saveScratchBtn').addEventListener('click', saveScratch);
 
   // Typing math in the search box shows the answer.
@@ -2332,6 +2352,7 @@
         { icon: 'function', label: 'Calculator', hint: 'graphs & math', run: () => createNote('calc') },
         '-',
         { icon: 'calculator', label: 'Quick calc', hint: 'not saved', run: () => openQuickCalc() },
+        { icon: 'atom', label: 'Periodic table', hint: 'in a corner', run: () => ensurePTable().open() },
         '-',
         { icon: 'sparkle', label: 'More coming soon 🙂', disabled: true, run: () => {} },
       ],
@@ -2716,6 +2737,7 @@
     document.documentElement.classList.toggle('is-tab', IS_TAB);
     state.settings = await Store.getSettings();
     applyTheme();
+    if (state.settings.ptable && state.settings.ptable.open) ensurePTable();
     refreshPageContext();
     const notes = await Store.all();
     for (const n of notes) state.notes.set(n.id, n);

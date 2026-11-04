@@ -596,3 +596,75 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
 .rich figure.sketch[data-size="m"] img { width: min(100%, 360px); }
 .rich figure.sketch[data-size="l"] img { width: min(100%, 520px); }
 .rich figure.sketch[data-size="f"] img { width: 100%; }
+
+/* ---------- periodic table (floating in a corner) ---------- */
+.ptable {
+  position: fixed; z-index: 35; width: min(470px, calc(100vw - 16px)); max-height: calc(100vh - 16px); display: flex; flex-direction: column;
+  padding: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22); font-size: 12px;
+}
+.ptable[hidden] { display: none; }
+.ptable[data-corner="br"] { right: 8px; bottom: 8px; }
+.ptable[data-corner="bl"] { left: 8px; bottom: 8px; }
+.ptable[data-corner="tr"] { right: 8px; top: 8px; }
+.ptable[data-corner="tl"] { left: 8px; top: 8px; }
+.ptable[data-mode="full"] { width: min(520px, calc(100vw - 16px)); }
+.pt-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.pt-title { font-weight: 650; font-size: 13px; margin-right: auto; white-space: nowrap; }
+.pt-search { width: 96px; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); color: var(--text); font: inherit; }
+.pt-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.pt-btn { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.pt-btn:hover { background: var(--surface-2); color: var(--text); }
+.pt-grid { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); grid-template-rows: repeat(7, auto) 6px repeat(2, auto); gap: 2px; }
+.pt-cell {
+  --cat: #868e96; position: relative; aspect-ratio: 1; min-width: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--cat) 55%, transparent); border-radius: 4px; cursor: pointer; font: inherit; color: var(--text);
+  background: color-mix(in srgb, var(--cat) 24%, var(--surface));
+}
+.pt-cell:hover { background: color-mix(in srgb, var(--cat) 45%, var(--surface)); }
+.pt-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 1; }
+.pt-cell.sel { outline: 2px solid var(--text); outline-offset: 0; z-index: 1; }
+.pt-z { position: absolute; top: 1px; left: 2px; font-size: 7px; line-height: 1; color: var(--muted); }
+.pt-sym { font-size: 11px; font-weight: 650; line-height: 1; }
+.pt-cell.rad .pt-sym { font-style: italic; }
+.pt-gap { aspect-ratio: auto; font-size: 8px; color: var(--muted); background: none; border-style: dashed; cursor: default; }
+.pt-cell[data-cat="nonmetals"] { --cat: #37b24d; }
+.pt-cell[data-cat="noble-gases"] { --cat: #7950f2; }
+.pt-cell[data-cat="alkali-metals"] { --cat: #f03e3e; }
+.pt-cell[data-cat="alkaline-earth-metals"] { --cat: #f76707; }
+.pt-cell[data-cat="metalloids"] { --cat: #15aabf; }
+.pt-cell[data-cat="halogens"] { --cat: #fab005; }
+.pt-cell[data-cat="poor-metals"] { --cat: #4c6ef5; }
+.pt-cell[data-cat="transition-metals"] { --cat: #e64980; }
+.pt-cell[data-cat="lanthanides"] { --cat: #12b886; }
+.pt-cell[data-cat="actinides"] { --cat: #ae3ec9; }
+.pt-chips { margin-top: 8px; }
+.pt-name { font-size: 14px; margin-bottom: 4px; }
+.pt-sub { color: var(--muted); font-size: 11.5px; }
+.pt-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-chip { display: inline-flex; align-items: baseline; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer; }
+.pt-chip:hover:not(:disabled) { border-color: var(--accent); }
+.pt-chip:disabled { opacity: 0.5; cursor: default; }
+.pt-chip-l { color: var(--muted); font-size: 11px; }
+.pt-chip-v { font-weight: 650; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pt-detail { overflow-y: auto; min-height: 0; margin-top: 8px; }
+.pt-detail:empty { display: none; }
+.pt-props { display: grid; gap: 2px; }
+.pt-prop { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.pt-prop-l { color: var(--muted); }
+.pt-prop-v { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.pt-val { padding: 1px 6px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pt-val:hover:not(:disabled) { border-color: var(--accent); background: var(--surface-2); }
+.pt-val:disabled { color: var(--muted); cursor: default; }
+.pt-meta { margin: 6px 0; color: var(--muted); font-size: 11.5px; }
+.pt-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.pt-link:hover { text-decoration: underline; }
+.pt-iso-head { margin: 10px 0 4px; }
+.pt-iso { display: grid; gap: 1px; margin-bottom: 6px; }
+.pt-iso-row { display: grid; grid-template-columns: 44px 1fr 1fr 1fr 36px; align-items: center; gap: 4px; padding: 1px 0; }
+.pt-iso-row .pt-val { text-align: left; }
+.pt-iso-h { color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--border); }
+.pt-iso-a { font-weight: 650; }
+.pt-iso-a sup { font-size: 9px; }
+.pt-iso-spin { color: var(--muted); font-size: 11px; }
+@media (max-width: 440px) { .pt-z { display: none; } .pt-sym { font-size: 9.5px; } .pt-search { width: 76px; } .pt-iso-row { grid-template-columns: 38px 1fr 1fr 1fr 28px; } }

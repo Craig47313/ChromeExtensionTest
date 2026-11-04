@@ -17,6 +17,7 @@
           <button class="icon-btn side-close" id="sidebarClose" data-icon="panel-left-close" title="Hide notes (Ctrl+\)" aria-label="Hide notes list"></button><img src="icons/icon-32.png" alt="" width="22" height="22"><span>Inkwell</span></div>
         <div class="head-actions">
           <button class="icon-btn" id="quickCalcBtn" data-icon="calculator" title="Quick calc (not saved)"></button>
+          <button class="icon-btn" id="ptableBtn" data-icon="atom" title="Periodic table" aria-pressed="false"></button>
           <button class="icon-btn" id="themeBtn" title="Theme"></button>
           <button class="icon-btn" id="appMenuBtn" data-icon="more" title="More options" aria-haspopup="menu"></button>
         </div>
@@ -56,6 +57,7 @@
           <input id="titleInput" class="title-input" placeholder="Untitled" maxlength="200" aria-label="Title">
           <span id="saveStatus" class="save-status" aria-live="polite"></span>
           <button class="btn primary save-scratch" id="saveScratchBtn" data-icon="check" title="Save this calculation to your notes">Save</button>
+          <button class="icon-btn" id="ptableBtn2" data-icon="atom" title="Periodic table" aria-pressed="false"></button>
           <button class="icon-btn" id="pinBtn" data-icon="pin" title="Pin to top"></button>
           <button class="icon-btn danger" id="deleteNoteBtn" data-icon="trash" title="Delete note"></button>
           <button class="icon-btn" id="noteMenuBtn" data-icon="more" title="Note options" aria-haspopup="menu"></button>
@@ -252,6 +254,8 @@
   <script src="lib/crop.js"></script>
   <script src="lib/ink-canvas.js"></script>
   <script src="lib/mathlib.js"></script>
+  <script src="lib/elements.js"></script>
+  <script src="lib/ptable.js"></script>
   <script src="lib/graph.js"></script>
   <script src="calc.js"></script>
   <script src="app.js"></script>
