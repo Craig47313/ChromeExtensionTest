@@ -668,3 +668,6 @@ dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ac
 .pt-iso-a sup { font-size: 9px; }
 .pt-iso-spin { color: var(--muted); font-size: 11px; }
 @media (max-width: 440px) { .pt-z { display: none; } .pt-sym { font-size: 9.5px; } .pt-search { width: 76px; } .pt-iso-row { grid-template-columns: 38px 1fr 1fr 1fr 28px; } }
+
+.pt-calc { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.pt-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }

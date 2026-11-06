@@ -121,6 +121,41 @@ module.exports = {
     await ctx.close();
   },
 
+  async 'element and isotope data in rows: typed live, typeset, and answered'() {
+    const { ctx, page, errors } = await openInkwell();
+    await openCalc(page, ['']);
+    const row = (n) => `#calcRows .calc-row:nth-child(${n})`;
+    const input = `${row(1)} .row-input`;
+    await page.click(input, { force: true });
+    await page.keyboard.type('mass(Fe-56)');
+    await page.waitForTimeout(250);
+    assert.equal(await page.inputValue(input), 'mass(Fe-56)');
+    assert.ok(await page.$(`${row(1)} .row-math .math-caret`), 'the caret stays in the typeset row');
+    assert.equal(await page.$$eval(`${row(1)} .row-math mi`, (m) => m.filter((x) => x.textContent === 'Fe').length), 1, 'Fe is one upright symbol, not F times e');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('molar(Ca(OH)2)');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('EN(oxygen)');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('halflife(C-14)');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('mass(Fe, 999)');
+    await page.keyboard.press('Escape');
+    await page.click(`${row(5)} .row-math`).catch(() => {});
+    await page.click('#calcTitle, .editor-head', { timeout: 1000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const out = await extra(page);
+    assert.match(out[0], /55\.93493/, 'the isotope mass');
+    assert.match(out[1], /74\.09/, 'molar mass of calcium hydroxide');
+    assert.match(out[2], /3\.44/, 'electronegativity by element name');
+    assert.match(out[3].replace(/[\s,]/g, ''), /1799\d*/, 'the half-life of carbon-14 in seconds (about 1.8e11)');
+    assert.match(out[4], /Fe-999 isn’t in the isotope data|isotope/, 'a clear message for an isotope that does not exist');
+    // the formula is typeset with a subscript
+    assert.ok(await page.$(`${row(2)} .row-math msub`), 'subscripts in the formula');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  },
+
   async 'the Appearance dialog has the typeset switch and it sticks'() {
     const { ctx, page, errors } = await openInkwell();
     await openAppearance(page);

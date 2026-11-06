@@ -125,3 +125,72 @@ test('typeset: fractions, powers, roots, calculus', () => {
   // Names defined elsewhere stay whole: "speed" isn't s·p·e·e·d.
   assert.ok(!M.typeset('speed*2', ['speed = 3']).includes('<mi>s</mi><mi>p</mi>'));
 });
+
+// ---------- element and isotope data ----------
+globalThis.self = globalThis;
+require('../lib/elements.js');
+
+test('elements: mass, number, electronegativity and friends take a symbol or a name', () => {
+  near(value('mass(Fe)'), 55.845);
+  near(value('mass(iron)'), 55.845);
+  near(value('mass(26)'), 55.845);
+  assert.equal(value('protons(Au)'), 79);
+  near(value('EN(O)'), 3.44);
+  near(value('EN(fluorine)'), 3.98);
+  near(value('IE(Na)'), 5.139, 1e-3);
+  near(value('mp(Fe)'), 1811.2, 1e-4);
+  near(value('bp(water)'.replace('water', 'O')), 90.2, 0.05);
+  assert.ok(value('density(Au)') > 19);
+  near(value('radius(Cs)'), 260);
+  near(value('mass(aluminium)'), 26.98, 1e-3);
+});
+
+test('isotopes: mass, abundance, half-life, neutrons — by number or as Fe-56', () => {
+  near(value('mass(Fe, 56)'), 55.934936, 1e-6);
+  near(value('mass(Fe-56)'), 55.934936, 1e-6);
+  near(value('abundance(Fe, 56)'), 91.754, 1e-4);
+  assert.equal(value('abundance(Fe-55)'.replace('Fe-55', 'Fe, 55')), 0);
+  assert.equal(value('neutrons(Fe, 56)'), 30);
+  assert.equal(value('neutrons(C-14)'), 8);
+  assert.equal(value('neutrons(C)'), 6, 'the most abundant isotope when none is given');
+  near(value('halflife(C, 14)') / (365.25 * 86400), 5700, 0.02);
+  assert.equal(value('halflife(Fe, 56)'), Infinity, 'stable');
+});
+
+test('elements and isotopes work inside bigger expressions and definitions', () => {
+  near(value('2*mass(O) + mass(H)*2'), 2 * 15.999 + 2 * 1.008, 1e-3);
+  const r = M.evaluate([{ text: 'm = mass(C, 12)' }, { text: 'm / 12' }]);
+  near(r[1].value, 1, 1e-6);
+  near(M.evaluate([{ text: 'f(x) = x * EN(O)' }, { text: 'f(2)' }])[1].value, 6.88);
+});
+
+test('molar mass of a formula', () => {
+  near(value('molar(H2O)'), 18.015, 1e-3);
+  near(value('molar(CO2)'), 44.009, 1e-3);
+  near(value('molar(Ca(OH)2)'), 74.093, 1e-3);
+  near(value('molar(Al2(SO4)3)'), 342.15, 1e-3);
+  near(value('molar(CuSO4.5H2O)'), 249.68, 1e-3);
+  near(value('molar(NaCl) * 2'), 116.88, 1e-3);
+  near(value('molar(C6H12O6)'), 180.156, 1e-3);
+});
+
+test('element errors say what is wrong, and ordinary names keep working', () => {
+  assert.match(one('mass(Fe, 999)').message, /Fe-999 isn’t in the isotope data/);
+  assert.match(one('EN(He)').message, /Helium has no electronegativity/);
+  assert.match(one('mass(200)').message, /no element with atomic number 200/);
+  assert.equal(one('molar(Xx2)').kind, 'error');
+  // a variable called mass or radius is still just a variable
+  const r = M.evaluate([{ text: 'mass = 5' }, { text: 'radius = 2' }, { text: 'mass * radius' }]);
+  assert.equal(r[2].value, 10);
+});
+
+test('element rows are typeset with upright symbols and subscripted formulas', () => {
+  const t = M.typeset('mass(Fe, 56)');
+  assert.match(t, /<mi[^>]*>mass<\/mi>/);
+  assert.match(t, /<mi mathvariant="normal">Fe<\/mi>/);
+  const f = M.typeset('molar(Ca(OH)2)');
+  assert.match(f, /<msub>.*OH.*<\/msub>|<msub><mrow><mo>\(<\/mo>/);
+  assert.match(f, /<mi mathvariant="normal">Ca<\/mi>/);
+  // still readable while typing, with the caret inside
+  assert.ok(M.typeset('mass(F)', ['mass(F)'], 6));
+});

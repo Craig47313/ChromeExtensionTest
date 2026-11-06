@@ -61,6 +61,8 @@ module.exports = {
     await until(async () => (await clip(page)) === '1538.05');
     await page.click('#ptable .pt-prop:has-text("Electron configuration") .pt-val');
     await until(async () => (await clip(page)) === '[Ar] 3d6 4s2');
+    await page.click('#ptable .pt-code >> text=mass(Fe-56)');
+    await until(async () => (await clip(page)) === 'mass(Fe-56)', { what: 'a formula for a calculator row' });
     await page.click('#ptable >> text=Show all');
     assert.ok((await page.$$('#ptable .pt-iso-row')).length > 20, 'all of the known isotopes');
     // an element with no natural isotopes lists its longest-lived ones
